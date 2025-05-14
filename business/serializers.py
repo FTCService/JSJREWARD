@@ -75,7 +75,12 @@ class BusinessRewardRuleSerializer(serializers.ModelSerializer):
                 "success": False, 
                 "error": f"A reward rule with type '{reward_type}' already exists. Please select another type."
             })
+        
+        # Assign count specific to the business
+        existing_rules = BusinessRewardRule.objects.filter(RewardRuleBizId=user.business_id)
+        validated_data["count"] = existing_rules.count() + 1
 
+        validated_data["RewardRuleIsDefault"] = existing_rules.count() == 0
         # Assign `RewardRuleBizId` as the authenticated user's business ID
         validated_data["RewardRuleBizId"] = user.business_id
 

@@ -18,7 +18,7 @@ class BusinessRewardRule(models.Model):
         max_digits=10, decimal_places=2, verbose_name="Notional Value"
     )
     
-    RewardRuleValue = models.FloatField(verbose_name="Reward Rule Value", null=True, blank=True, default=1.0)  
+    RewardRuleValue = models.FloatField(verbose_name="Reward Rule Value", null=True, blank=True)  
     
     RewardRuleValidityPeriodYears = models.IntegerField(
         verbose_name="Validity Period (years)", null=True, blank=True
@@ -27,6 +27,9 @@ class BusinessRewardRule(models.Model):
         verbose_name="Milestone (Points)", null=True, blank=True
     )
 
+    RewardRuleIsDefault = models.BooleanField(default=False, verbose_name="Is Default Reward Rule")
+    count = models.PositiveIntegerField(default=1, editable=False)
+    
     CreatedAt = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
     UpdatedAt = models.DateTimeField(auto_now=True, verbose_name="Updated At")
 

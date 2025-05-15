@@ -262,6 +262,8 @@ class BusinessCardDesignSerializer(serializers.ModelSerializer):
         fields = '__all__' 
         
         
-        
+class MemberByCardSerializer(serializers.Serializer):
+    mbrcardno = serializers.CharField()
+   
         
 

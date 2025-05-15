@@ -32,3 +32,36 @@ def send_sms(payload):
     except Exception as e:
         print(f"Exception: {str(e)}")
         return {"error": str(e)}
+    
+    
+
+AUTH_SERVICE_URL = "http://127.0.0.1:8000/api/member-details/"  
+
+def get_member_details_by_mobile(mobile_number):
+    try:
+        response = requests.get(AUTH_SERVICE_URL, params={"mobile_number": mobile_number})
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except requests.RequestException as e:
+        print(f"Error contacting auth service: {e}")
+        return None
+    
+    
+
+
+AUTH_SERVICE_URL = "http://127.0.0.1:8000/api/cardno/member-details/"  
+
+def get_member_details_by_card(card_number):
+    try:
+        response = requests.get(AUTH_SERVICE_URL, params={"card_number": card_number})
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except requests.RequestException as e:
+        print(f"Error contacting auth service: {e}")
+        return None
+    
+    
+    
+    

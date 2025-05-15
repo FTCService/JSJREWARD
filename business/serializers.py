@@ -133,7 +133,7 @@ class BusinessMemberSerializer(serializers.ModelSerializer):
 
 class SpecificCardTransactionSerializer(serializers.Serializer):
     card_number = serializers.CharField(required=True)
-    transaction_type = serializers.ChoiceField(choices=["debit", "credit"], required=False)
+    # transaction_type = serializers.ChoiceField(choices=["debit", "credit"], required=False)
 
 
 class FetchMemberDetailsSerializer(serializers.Serializer):
@@ -153,13 +153,9 @@ class CardTransactionSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get("request")  # Get request from context
         
-        if not request or not hasattr(request.user, "business_id") or not request.user.business_id:
-            raise serializers.ValidationError({"error": "Only businesses can create transactions."})
-
-        try:
-            business_instance = Business.objects.get(business_id=request.user.business_id)
-        except Business.DoesNotExist:
-            raise serializers.ValidationError({"error": "Business not found."})
+    
+        business_instance = request.user.business_id
+        
 
         validated_data["CrdTrnsBizId"] = business_instance  # Assign business instance
 

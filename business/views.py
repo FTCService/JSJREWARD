@@ -336,10 +336,9 @@ class NewMemberEnrollAPI(APIView):
 
             # Fetch member data from external AUTH service
             member_data = get_member_details_by_mobile(mobile_number)
-            print(member_data)
-
-            if member_data:
-                mbrcardno = member_data.get("mbrcardno")
+            mbrcardno = member_data.get("mbrcardno")
+            if mbrcardno:
+                
                 print(mbrcardno)
                 # Check if member is active under this business
                 business_member = BusinessMember.objects.filter(
@@ -568,3 +567,371 @@ class CheckMemberActiveByCardmobileNo(APIView):
             {"success": True, "message": "Active member found.", "data": serializer.data, "BizMbrIsActive": True, "card_number":card_number},
             status=status.HTTP_200_OK
         )
+
+
+
+
+
+# ---------------  Business Member get and List  ------------------       
+class BusinessMemberListCreateApi(APIView):
+    """
+    API to list and create Business Members.
+    """
+    authentication_classes = [SSOBusinessTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Retrieve a list of all Business Members.",
+        responses={200: BusinessMemberSerializer(many=True)}
+    )
+    def get(self, request):
+        """
+        List all Business Members.
+        """
+        business_members = BusinessMember.objects.filter(BizMbrBizId=request.user.business_id)
+        data = []
+        for member in business_members:
+            data.append({
+                "BizMbrBizId": member.BizMbrBizId.business_id,  
+                "BizMbrCardNo": member.BizMbrCardNo.mbrcardno,  
+                "BizMbrRuleId": member.BizMbrRuleId.id,  
+                "BizMbrIssueDate": member.BizMbrIssueDate,  
+                "BizMbrValidityEnd": member.BizMbrValidityEnd,
+                "BizMbrIsActive": member.BizMbrIsActive,
+                "full_name": member.BizMbrCardNo.full_name,  # Fetch member's full name
+                "mobile_number": member.BizMbrCardNo.mobile_number  # Fetch member's mobile number
+            })
+        serializer = BusinessMemberSerializer(business_members, many=True)
+        return Response(data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+    request_body=BusinessMemberSerializer,
+    operation_description="Create a Business Member from a scanned QR code (card number)."
+    )
+    def post(self, request):
+        """
+        Handle the card_number from the QR code and create a Business Member.
+        """
+        card_number = request.data.get("BizMbrCardNo")  # Get card number from the scanned QR code
+        reward_rule_id = request.data.get("BizMbrRuleId")  
+
+        if not card_number or not reward_rule_id:
+            return Response({"success": False, "error": "card_number and reward_rule_id are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            business_instance = request.user.business_id
+            
+            # ✅ Fetch Reward Rule associated with the authenticated business user
+            reward_rule = BusinessRewardRule.objects.get(
+                pk=reward_rule_id, 
+                RewardRuleBizId=business_instance
+            )
+
+            # ✅ Convert validity period to years
+            validity_period_years = int(reward_rule.RewardRuleValidityPeriodYears)  
+            current_date = datetime.now()
+            validity_end_date = current_date + timedelta(days=validity_period_years * 365)  # Convert years to days
+
+            # ✅ Fetch the Member from the card number
+            
+            member_data = get_member_details_by_card(card_number)
+            
+            member = member_data.get("mbrcardno")
+
+            # ✅ Check if an active membership already exists for this business and card
+            existing_membership = BusinessMember.objects.filter(
+                BizMbrBizId=business_instance,
+                BizMbrCardNo=member,
+                BizMbrIsActive=True
+            ).exists()
+
+            if existing_membership:
+                return Response({"success": False, "BizMbrIsActive":False, "error": "This card number is already activated for this business."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Prepare the data for serializer
+            data = {
+                "BizMbrBizId": request.user.business_id,  
+                "BizMbrCardNo": member,  
+                "BizMbrRuleId": reward_rule.id,  
+                "BizMbrIssueDate": current_date,  
+                "BizMbrValidityEnd": validity_end_date,
+                "BizMbrIsActive": True  # Set new entry as active
+            }
+
+            # Use the serializer to validate and save the data
+            serializer = BusinessMemberSerializer(data=data)
+            if serializer.is_valid():
+                # Save the BusinessMember
+                serializer.save()
+                return Response({
+                    "success": True,
+                    "BizMbrIsActive":True,
+                    "message": "Business Member created successfully.",
+                    "data": serializer.data
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({"success": False, "error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        except BusinessRewardRule.DoesNotExist:
+            return Response({"success": False, "error": "Invalid Reward Rule ID or not associated with this business."}, status=status.HTTP_400_BAD_REQUEST)
+
+       
+        except IntegrityError:
+            return Response({"success": False, "error": "Failed to insert the record into BusinessMember table."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    
+    
+    
+
+class BusinessMemberDetailApi(APIView):
+    """
+    API to retrieve, update, or delete a specific Business Member.
+    """
+    authentication_classes = [SSOBusinessTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Retrieve details of a specific Business Member.",
+        responses={200: BusinessMemberSerializer()}
+    )
+    def get(self, request, pk):
+        """
+        Retrieve a specific Business Member.
+        """
+        try:
+            business_member = BusinessMember.objects.get(pk=pk, BizMbrBizId=request.user.business_id)
+            serializer = BusinessMemberSerializer(business_member)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except BusinessMember.DoesNotExist:
+            return Response({"error": "Business Member not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    @swagger_auto_schema(
+        request_body=BusinessMemberSerializer,
+        operation_description="Update an existing Business Member."
+    )
+    def put(self, request, pk):
+        """
+        Update an existing Business Member.
+        """
+        try:
+            business_member = BusinessMember.objects.get(pk=pk, BizMbrBizId=request.user.business_id)
+            serializer = BusinessMemberSerializer(business_member, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({"message": "Business Member updated successfully.", "data": serializer.data}, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except BusinessMember.DoesNotExist:
+            return Response({"error": "Business Member not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    @swagger_auto_schema(
+        operation_description="Delete a specific Business Member.",
+        responses={204: "Deleted successfully"}
+    )
+    def delete(self, request, pk):
+        """
+        Delete a Business Member.
+        """
+        try:
+            business_member = BusinessMember.objects.get(pk=pk, BizMbrBizId=request.user.business_id)
+            business_member.delete()
+            return Response({"message": "Business Member deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        except BusinessMember.DoesNotExist:
+            return Response({"error": "Business Member not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        
+        
+### ------------- ✅ Card Transaction API --------------- ###
+class CardTransactionApi(APIView):
+    authentication_classes = [SSOBusinessTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(responses={200: CardTransactionSerializer(many=True)})
+    def get(self, request):
+        """Retrieve all Card Transactions for the logged-in business."""
+        transactions = CardTransaction.objects.filter(CrdTrnsBizId=request.user.business_id)
+        serializer = CardTransactionSerializer(transactions, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(request_body=CardTransactionSerializer)
+    def post(self, request):
+        """Create a new Card Transaction and auto-assign the Business ID."""
+        serializer = CardTransactionSerializer(data=request.data, context={"request": request})
+
+        if serializer.is_valid():
+            transaction = serializer.save()
+            return Response(
+                {
+                    "success": True,
+                    "message": "Transaction recorded successfully.",
+                    "transaction_id": transaction.id,
+                    "business_id": request.user.business_id,
+                    "business_name": request.user.business_name,
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    
+# ---------------- transaction details ----------------
+class CardTransactionDetailApi(APIView):
+    authentication_classes = [SSOBusinessTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(responses={200: CardTransactionSerializer()})
+    def get(self, request, transaction_id):
+        """Retrieve details of a specific Card Transaction by ID."""
+        try:
+            transaction = CardTransaction.objects.get(id=transaction_id, CrdTrnsBizId=request.user.business_id)
+        except CardTransaction.DoesNotExist:
+            return Response({"error": "Transaction not found or access denied."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = CardTransactionSerializer(transaction)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+    
+class SpecificCardTransactionApi(APIView):
+    """Retrieve transaction history for a specific card, filter by debit and credit, and return cumulative points."""
+
+    authentication_classes = [SSOBusinessTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        query_serializer=SpecificCardTransactionSerializer,
+        responses={
+            200: openapi.Response(description="Transaction history retrieved successfully"),
+            400: openapi.Response(description="Bad request"),
+            404: openapi.Response(description="No transactions found for this card"),
+        }
+    )
+    def get(self, request, card_number):
+        serializer = SpecificCardTransactionSerializer(data=request.query_params)
+
+        if not serializer.is_valid():
+            return Response({"success": False, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        transaction_type = serializer.validated_data.get("transaction_type")
+
+        # Fetch transactions for the given card number
+        transactions = CardTransaction.objects.filter(
+            CrdTrnsBizId=request.user.business_id,
+            CrdTrnsCardNumber=card_number
+        )
+
+        if transaction_type:
+            transactions = transactions.filter(CrdTrnsTransactionType=transaction_type.lower())
+
+        # Fetch cumulative points
+        try:
+            cumulative_points = CumulativePoints.objects.get(
+                CmltvPntsMbrCardNo=card_number,
+                CmltvPntsBizId=request.user.business_id
+            )
+            cumulative_data = {
+                "LifetimeEarnedPoints": cumulative_points.LifetimeEarnedPoints,
+                "LifetimeRedeemedPoints": cumulative_points.LifetimeRedeemedPoints,
+                "CurrentBalance": cumulative_points.CurrentBalance,
+                "TotalPurchaseAmount": cumulative_points.TotalPurchaseAmount,
+                "LastUpdated": cumulative_points.LastUpdated
+            }
+        except CumulativePoints.DoesNotExist:
+            cumulative_data = {"message": "No cumulative points data found for this card."}
+
+        # Get reward rule info
+        try:
+            business_member = BusinessMember.objects.select_related("BizMbrRuleId").get(
+                BizMbrBizId=request.user.business_id,
+                BizMbrCardNo=card_number,
+                BizMbrIsActive=True
+            )
+            reward_rule = business_member.BizMbrRuleId
+            reward_info = {
+                "RewardRuleId": reward_rule.id,
+                "RewardRuleType": reward_rule.RewardRuleType,
+                "RewardRuleNotionalValue": reward_rule.RewardRuleNotionalValue,
+                "RewardRuleValue": reward_rule.RewardRuleValue
+            }
+        except BusinessMember.DoesNotExist:
+            reward_info = {"message": "No active reward rule assigned for this card."}
+
+        if not transactions.exists():
+            return Response(
+                {
+                    "success": False,
+                    "message": "No transactions found for this card.",
+                    "cumulative_points": cumulative_data,
+                    "reward_info": reward_info
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        transaction_serializer = CardTransactionSerializer(transactions, many=True)
+        
+        return Response(
+            {
+                "success": True,
+                "transactions": transaction_serializer.data,
+                "cumulative_points": cumulative_data,
+                "reward_info": reward_info
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+
+# -------------- create a redeem transaction -------------- #
+class RedeemPointsAPIView(APIView):
+    """API endpoint for redeeming fixed milestone points."""
+
+    @swagger_auto_schema(
+        request_body=RedeemPointsSerializer,
+        responses={
+            200: openapi.Response(
+                description="Points redemption status",
+                examples={
+                    "application/json": {
+                        "success": False,
+                        "error": "Insufficient points for redemption."
+                    }
+                }
+            ),
+            201: openapi.Response(
+                description="Points redeemed successfully",
+                examples={
+                    "application/json": {
+                        "success": True,
+                        "message": "Points redeemed successfully!",
+                        "transaction_id": 5
+                    }
+                }
+            ),
+        }
+    )
+    def post(self, request):
+        serializer = RedeemPointsSerializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+            transaction = serializer.save()
+            return Response(
+                {
+                    "success": True,
+                    "message": "Points redeemed successfully!",
+                    "transaction_id": transaction.id
+                },
+                status=status.HTTP_201_CREATED
+            )
+        except ValidationError as e:
+            return Response(
+                {
+                    "success": False,
+                    "message": e.detail.get("non_field_errors", ["Validation error"])[0]
+                },
+                status=status.HTTP_200_OK  # ⬅️ Custom 200 for validation error
+            )
+    
+

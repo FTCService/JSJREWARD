@@ -35,11 +35,11 @@ def send_sms(payload):
     
     
 
-AUTH_SERVICE_URL = "http://127.0.0.1:8000/api/member-details/"  
+AUTH_SERVICE_MOBILE_URL = "http://127.0.0.1:8000/api/member-details/"  
 
 def get_member_details_by_mobile(mobile_number):
     try:
-        response = requests.get(AUTH_SERVICE_URL, params={"mobile_number": mobile_number})
+        response = requests.get(AUTH_SERVICE_MOBILE_URL, params={"mobile_number": mobile_number})
         if response.status_code == 200:
             return response.json()
         return None
@@ -50,11 +50,11 @@ def get_member_details_by_mobile(mobile_number):
     
 
 
-AUTH_SERVICE_URL = "http://127.0.0.1:8000/api/cardno/member-details/"  
+AUTH_SERVICE_CARD_URL = "http://127.0.0.1:8000/api/cardno/member-details/"  
 
 def get_member_details_by_card(card_number):
     try:
-        response = requests.get(AUTH_SERVICE_URL, params={"card_number": card_number})
+        response = requests.get(AUTH_SERVICE_CARD_URL, params={"card_number": card_number})
         if response.status_code == 200:
             return response.json()
         return None

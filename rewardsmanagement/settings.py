@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     'business',
+    'member',
     'rest_framework',
     'drf_yasg',
     'corsheaders',

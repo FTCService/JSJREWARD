@@ -65,3 +65,17 @@ def get_member_details_by_card(card_number):
     
     
     
+    
+AUTH_SERVICE_BUSINESS_URL = "http://127.0.0.1:8000/api/business/details/"  
+
+def get_business_details_by_id(business_id):
+    try:
+        response = requests.get(AUTH_SERVICE_BUSINESS_URL, params={"business_id": business_id})
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except requests.RequestException as e:
+        print(f"Error contacting auth service: {e}")
+        return None
+
+

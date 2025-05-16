@@ -25,6 +25,9 @@ urlpatterns = [
 
     path("member/specific/transactions/<str:card_number>", views.SpecificCardTransactionApi.as_view(), name="specific_card_transactions"),
     
+    path('redeem/', views.RedeemPointsAPIView.as_view(), name="redeem-points"),
+    
+    path("business-reports/", views.BusinessReportsAPIView.as_view(), name="business_reports"),
     
     
   

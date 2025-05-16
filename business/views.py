@@ -935,3 +935,54 @@ class RedeemPointsAPIView(APIView):
             )
     
 
+class BusinessReportsAPIView(APIView):
+    """API endpoint for business reports."""
+    
+    authentication_classes = [SSOBusinessTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        responses={
+            200: openapi.Response(
+                description="Business Reports",
+                examples={
+                    "application/json": {
+                        "success": True,
+                        "total_cards_registered": 100,
+                        "total_transaction_amount": 50000.00,
+                        "average_transaction_amount": 500.00
+                    }
+                }
+            ),
+            403: openapi.Response(
+                description="Unauthorized access",
+                examples={"application/json": {"success": False, "error": "Permission denied"}}
+            ),
+        }
+    )
+    def get(self, request):
+        """Retrieve business report including total cards, transaction amount, and average transaction amount."""
+        business_id = request.user.business_id
+
+        # Count total cards registered for the business
+        total_cards_registered = BusinessMember.objects.filter(BizMbrBizId=business_id).count()
+
+        # Get total and average transaction amounts
+        transactions = CardTransaction.objects.filter(CrdTrnsBizId__business_id=business_id)
+        # Total transaction amount (all types)
+        total_transaction_amount = transactions.aggregate(
+            Sum("CrdTrnsPurchaseAmount")
+        )["CrdTrnsPurchaseAmount__sum"] or 0
+
+        # Average amount of credit transactions only
+        credit_avg_transaction_amount = transactions.filter(
+            CrdTrnsTransactionType='Points_Earned'
+        ).aggregate(
+            Avg("CrdTrnsPurchaseAmount")
+        )["CrdTrnsPurchaseAmount__avg"] or 0
+        return Response({
+            "success": True,
+            "total_cards_registered": total_cards_registered,
+            "total_transaction_amount": total_transaction_amount,
+            "average_transaction_amount": credit_avg_transaction_amount
+        }, status=status.HTTP_200_OK)

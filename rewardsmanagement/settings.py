@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     
     'business',
     'member',
+    'admin_dashboard',
     'rest_framework',
     'drf_yasg',
     'corsheaders',
@@ -133,6 +134,5 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
-AUTH_SERVER_URL = "http://127.0.0.1:8000/api"  # Adjust based on jsjcardauth URL
-
+ # Adjust based on jsjcardauth URL
+AUTH_SERVER_URL =env_vars['AUTH_SERVER_URL']

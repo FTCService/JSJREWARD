@@ -150,3 +150,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
  # Adjust based on jsjcardauth URL
 AUTH_SERVER_URL =env_vars['AUTH_SERVER_URL']
+
+
+# cros origin 
+CORS_ALLOW_ALL_ORIGINS = True

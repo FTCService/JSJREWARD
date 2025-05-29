@@ -5,6 +5,8 @@ from . import views
 
 
 urlpatterns = [
+    
+    path('member/active_in_clube/', views.BusinessMembercheckActiveAPI.as_view(), name='member-active_in_clube'),
 
     path("business-reward-rules/", views.BusinessRewardRuleListCreateApi.as_view(), name="business-reward-rules"),
     path('reward-rule/<int:pk>/set-default/', views.SetDefaultRewardRuleAPI.as_view(), name='set-default-reward-rule'),

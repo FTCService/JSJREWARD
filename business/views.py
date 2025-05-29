@@ -51,7 +51,7 @@ class BusinessRewardRuleListCreateApi(APIView):
             )
 
         # ✅ Filter using business_id instead of the default primary key
-        reward_rules = BusinessRewardRule.objects.filter(RewardRuleBizId__business_id=request.user.business_id)
+        reward_rules = BusinessRewardRule.objects.filter(RewardRuleBizId=request.user.business_id)
         serializer = BusinessRewardRuleSerializer(reward_rules, many=True)
         return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
 
@@ -279,7 +279,7 @@ class BusinessCardDesignAPI(APIView):
             business_instance = request.user.business_id
             business_card = BusinessCardDesign.objects.get(CardDsgBizId=business_instance)
         except BusinessCardDesign.DoesNotExist:
-            return Response({"error": "No Business Card Design found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Please Setup Your Card."}, status=status.HTTP_200_OK)
 
         serializer = BusinessCardDesignSerializer(business_card)
         return Response(serializer.data, status=status.HTTP_200_OK)

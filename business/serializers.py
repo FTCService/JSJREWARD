@@ -9,6 +9,20 @@ from django.conf import settings
 from .authentication import SSOBusinessTokenAuthentication
 
 
+class BusinessMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusinessMember
+        fields = [
+            "BizMbrCardNo",
+            "BizMbrRuleId",
+            "BizMbrIsActive",
+            "BizMbrIssueDate",
+            "BizMbrValidityEnd",
+            
+        ]
+
+
+
 class NewMemberSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=255)
     mobile_number = serializers.CharField(max_length=15)

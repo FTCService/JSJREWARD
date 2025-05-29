@@ -16,11 +16,11 @@ from .serializers import (
                           RedeemPointsSerializer,
                           SpecificCardTransactionSerializer,
                           CheckMemberActiveSerializer,
-                          MemberByCardSerializer
+                          MemberByCardSerializer,
+                          BusinessMemberSerializer
                           
                           )
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+
 from helpers.utils import send_sms, get_member_details_by_mobile, get_member_details_by_card
 from datetime import datetime, timedelta
 from django.db.models import Q
@@ -683,6 +683,23 @@ class BusinessMemberListCreateApi(APIView):
             return Response({"success": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     
+    
+class BusinessMembercheckActiveAPI(APIView):
+    # authentication_classes = [SSOBusinessTokenAuthentication]
+    # permission_classes = [IsAuthenticated]
+    def get(self, request):
+        card_number = request.GET.get("card_number")
+        business_id = request.GET.get("business_id")
+        if not card_number:
+            return Response({"message": "card number is required."}, status=status.HTTP_200_OK)
+         
+        member = BusinessMember.objects.filter(BizMbrCardNo=card_number, BizMbrBizId=business_id).first()
+        
+        if not member:
+            return Response({"message": "Member not active."}, status=status.HTTP_200_OK)
+
+        serializer = BusinessMemberSerializer(member)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
     
 

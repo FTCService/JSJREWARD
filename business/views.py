@@ -985,7 +985,7 @@ class BusinessReportsAPIView(APIView):
         total_cards_registered = BusinessMember.objects.filter(BizMbrBizId=business_id).count()
 
         # Get total and average transaction amounts
-        transactions = CardTransaction.objects.filter(CrdTrnsBizId__business_id=business_id)
+        transactions = CardTransaction.objects.filter(CrdTrnsBizId=business_id)
         # Total transaction amount (all types)
         total_transaction_amount = transactions.aggregate(
             Sum("CrdTrnsPurchaseAmount")

@@ -589,17 +589,22 @@ class BusinessMemberListCreateApi(APIView):
         List all Business Members.
         """
         business_members = BusinessMember.objects.filter(BizMbrBizId=request.user.business_id)
+        
         data = []
         for member in business_members:
+            print(member.BizMbrRuleId.id, "-----")
+            member_data = get_member_details_by_card(card_number=member.BizMbrCardNo)
+            full_name = member_data.get("full_name")
+            mobile_number = member_data.get("mobile_number")
             data.append({
-                "BizMbrBizId": member.BizMbrBizId.business_id,  
-                "BizMbrCardNo": member.BizMbrCardNo.mbrcardno,  
+                "BizMbrBizId": member.BizMbrBizId,  
+                "BizMbrCardNo": member.BizMbrCardNo, 
                 "BizMbrRuleId": member.BizMbrRuleId.id,  
                 "BizMbrIssueDate": member.BizMbrIssueDate,  
                 "BizMbrValidityEnd": member.BizMbrValidityEnd,
                 "BizMbrIsActive": member.BizMbrIsActive,
-                "full_name": member.BizMbrCardNo.full_name,  # Fetch member's full name
-                "mobile_number": member.BizMbrCardNo.mobile_number  # Fetch member's mobile number
+                "full_name": full_name,  
+                "mobile_number": mobile_number  # Fetch member's mobile number
             })
         serializer = BusinessMemberSerializer(business_members, many=True)
         return Response(data, status=status.HTTP_200_OK)

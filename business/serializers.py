@@ -189,78 +189,11 @@ class RedeemPointsSerializer(serializers.Serializer):
         """Check if the user has enough points to redeem a fixed milestone value."""
         card_number = data["card_number"]
         business_id = data["business_id"]
-
-        # Get the cumulative points for the user at the business
-        try:
-            cumulative_points = CumulativePoints.objects.get(
-                CmltvPntsMbrCardNo=card_number, CmltvPntsBizId=business_id
-            )
-        except CumulativePoints.DoesNotExist:
-            raise serializers.ValidationError("No cumulative points found for this card and business.")
-
-        # 🔍 Ensure we get the correct reward rule based on BusinessMember
-        business_member = BusinessMember.objects.filter(
-            BizMbrCardNo=card_number,
-            BizMbrBizId=business_id,
-            BizMbrIsActive=True
-        ).select_related("BizMbrRuleId").first()
-
-        if not business_member or not business_member.BizMbrRuleId:
-            raise serializers.ValidationError("No active reward rule found for this member.")
-
-        reward_rule = business_member.BizMbrRuleId  # Assigned reward rule
-        milestone = reward_rule.RewardRuleMilestone if reward_rule else 0
-
-        print(f"✅ Correct Milestone: {milestone} for Business ID: {business_id}")
-
-        if cumulative_points.CurrentBalance < milestone:
-            raise serializers.ValidationError("Insufficient points for redemption.")
-
+      
         return data
 
 
-    def create(self, validated_data):
-        """Process the redemption transaction with a fixed milestone deduction."""
-        card_number = validated_data["card_number"]
-        business_id = validated_data["business_id"]
-
-        cumulative_points = CumulativePoints.objects.get(
-            CmltvPntsMbrCardNo=card_number, CmltvPntsBizId=business_id
-        )
-
-        # 🔍 Fetch reward rule correctly
-        business_member = BusinessMember.objects.filter(
-            BizMbrCardNo=card_number,
-            BizMbrBizId=business_id,
-            BizMbrIsActive=True
-        ).select_related("BizMbrRuleId").first()
-
-        if not business_member or not business_member.BizMbrRuleId:
-            raise serializers.ValidationError("No active reward rule found for this member.")
-
-        reward_rule = business_member.BizMbrRuleId  # Assigned reward rule
-        milestone1 = reward_rule.RewardRuleMilestone  # Fixed point deduction value
-
-        print(f"📌 Final Deduction: {milestone1} for Business ID: {business_id}")
-
-        # 🔥 Create a new transaction with "debit" type
-        transaction = CardTransaction(
-            CrdTrnsCardNumber_id=card_number,
-            CrdTrnsBizId_id=business_id,
-            CrdTrnsPurchaseAmount=0,  # No purchase amount required
-            CrdTrnsPoint=milestone1,  # ✅ Ensure milestone is set
-            CrdTrnsTransactionType="Points_Redeemed"
-        )
-
-        transaction.save()  # ✅ Explicitly save transaction after setting points
-
-        # 🔥 Deduct points from cumulative balance
-        cumulative_points.LifetimeRedeemedPoints += milestone1
-        cumulative_points.CurrentBalance -= milestone1
-        cumulative_points.save()
-
-        return transaction
-
+   
 
 
 

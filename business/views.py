@@ -422,6 +422,7 @@ class MemberDetailByCardNumberApi(APIView):
             BizMbrCardNo=card_number,
             BizMbrBizId=request.user.business_id
         ).first()
+        
 
         milestone = (
             business_member.BizMbrRuleId.RewardRuleMilestone
@@ -936,25 +937,68 @@ class RedeemPointsAPIView(APIView):
     )
     def post(self, request):
         serializer = RedeemPointsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        card_number = serializer.validated_data["card_number"]
+        business_id = serializer.validated_data["business_id"]
+
+        # 🔍 Fetch cumulative points
         try:
-            serializer.is_valid(raise_exception=True)
-            transaction = serializer.save()
-            return Response(
-                {
-                    "success": True,
-                    "message": "Points redeemed successfully!",
-                    "transaction_id": transaction.id
-                },
-                status=status.HTTP_201_CREATED
+            cumulative_points = CumulativePoints.objects.get(
+                CmltvPntsMbrCardNo=card_number,
+                # CmltvPntsBizId=business_id
             )
-        except ValidationError as e:
+        except CumulativePoints.DoesNotExist:
             return Response(
-                {
-                    "success": False,
-                    "message": e.detail.get("non_field_errors", ["Validation error"])[0]
-                },
-                status=status.HTTP_200_OK  # ⬅️ Custom 200 for validation error
+                {"success": False, "message": "No cumulative points found for this card and business."},
+                status=status.HTTP_200_OK
             )
+
+        # 🔍 Fetch active business member and reward rule
+        business_member = BusinessMember.objects.filter(
+            BizMbrCardNo=card_number,
+            BizMbrBizId=business_id,
+            BizMbrIsActive=True
+        ).select_related("BizMbrRuleId").first()
+
+        if not business_member or not business_member.BizMbrRuleId:
+            return Response(
+                {"success": False, "message": "No active reward rule found for this member."},
+                status=status.HTTP_200_OK
+            )
+
+        reward_rule = business_member.BizMbrRuleId
+        milestone = reward_rule.RewardRuleMilestone
+
+        if cumulative_points.CurrentBalance < milestone:
+            return Response(
+                {"success": False, "message": "Insufficient points for redemption."},
+                status=status.HTTP_200_OK
+            )
+
+        # 💾 Create transaction
+        transaction = CardTransaction.objects.create(
+            CrdTrnsCardNumber=card_number,
+            CrdTrnsBizId=business_id,
+            CrdTrnsPurchaseAmount=0,
+            CrdTrnsPoint=milestone,
+            CrdTrnsTransactionType="Points_Redeemed"
+        )
+
+        # 🔄 Update points
+        cumulative_points.LifetimeRedeemedPoints += milestone
+        cumulative_points.CurrentBalance -= milestone
+        cumulative_points.save()
+
+        return Response(
+            {
+                "success": True,
+                "message": "Points redeemed successfully!",
+                "transaction_id": transaction.id
+            },
+            status=status.HTTP_201_CREATED
+        )
+
     
 
 class BusinessReportsAPIView(APIView):

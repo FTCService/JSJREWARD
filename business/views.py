@@ -407,15 +407,17 @@ class MemberDetailByCardNumberApi(APIView):
     def get(self, request, card_number):
         if not card_number:
             return Response({"error": "Card number is required."}, status=status.HTTP_400_BAD_REQUEST)
-
+        # card_number= 8835846533625056
         # Fetch member data from external AUTH service
         member_data = get_member_details_by_card(card_number)
-        if not member_data:
-            return Response({"error": "Member not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not member_data.get("mbrcardno"):
+            return Response({"message": "Member not found."}, status=status.HTTP_200_OK)
 
         # Extract mobile number and other details from external service response
         mobile_number = member_data.get("mobile_number")
         full_name = member_data.get("full_name")
+        print(full_name,mobile_number)
 
         # Continue logic using raw card_number
         business_member = BusinessMember.objects.filter(

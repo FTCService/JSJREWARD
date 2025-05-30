@@ -104,11 +104,11 @@ class BusinessRewardRuleSerializer(serializers.ModelSerializer):
 
 
 class CheckMemberActiveSerializer(serializers.ModelSerializer):
-    BizMbrCardNo = serializers.CharField(source="BizMbrCardNo.mbrcardno")  # Get card number from related Member model
+    # BizMbrCardNo = serializers.CharField(source="BizMbrCardNo.mbrcardno")  # Get card number from related Member model
 
     class Meta:
         model = BusinessMember
-        fields = ["BizMbrCardNo", "BizMbrIsActive"]
+        fields = ["BizMbrCardNo",'BizMbrBizId', "BizMbrIsActive"]
 
 
 

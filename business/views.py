@@ -538,17 +538,16 @@ class CheckMemberActiveByCardmobileNo(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            # Fetch member data from external AUTH service
-            member_data = get_member_details_by_mobile(mobile_number)
-            mbrcardno = member_data.get("mbrcardno")
-            print("mbrcardno:", mbrcardno)
-        except Exception:
+        
+        # Fetch member data from external AUTH service
+        member_data = get_member_details_by_mobile(mobile_number)
+        mbrcardno = member_data.get("mbrcardno")
+        if not mbrcardno:
             return Response(
-                {"success": False, "message": "No member found with this mobile number.", "BizMbrIsActive": False},
+                {"success": False, "message": "No member found with this mobile number.", "BizMbrIsActive": False, "is_present":False},
                 status=status.HTTP_200_OK
             )
-
+        full_name = member_data.get("full_name")
         business_id = request.user.business_id
 
         # Get the first active business member linked to this member and business
@@ -560,14 +559,14 @@ class CheckMemberActiveByCardmobileNo(APIView):
 
         if not business_member:
             return Response(
-                {"success": False, "message": "No active member found for this business.", "BizMbrIsActive": False, "card_number":mbrcardno},
+                {"success": False, "message": "No active member found for this business.", "BizMbrIsActive": False, "card_number":mbrcardno,"is_present":True,"full_name":full_name,"mobile_number":mobile_number},
                 status=status.HTTP_200_OK
             )
 
         # Serialize the active business member
         serializer = CheckMemberActiveSerializer(business_member)
         return Response(
-            {"success": True, "message": "Active member found.", "data": serializer.data, "BizMbrIsActive": True, "card_number":card_number},
+            {"success": True, "message": "Active member found.", "data": serializer.data, "BizMbrIsActive": True, "mbrcardno":mbrcardno},
             status=status.HTTP_200_OK
         )
 

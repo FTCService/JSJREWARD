@@ -566,7 +566,7 @@ class CheckMemberActiveByCardmobileNo(APIView):
         # Serialize the active business member
         serializer = CheckMemberActiveSerializer(business_member)
         return Response(
-            {"success": True, "message": "Active member found.", "data": serializer.data, "BizMbrIsActive": True, "mbrcardno":mbrcardno},
+            {"success": True, "message": "Active member found.", "data": serializer.data, "BizMbrIsActive": True},
             status=status.HTTP_200_OK
         )
 

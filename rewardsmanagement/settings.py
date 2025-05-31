@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     
     'business',
     'member',
+    'survey',
     'admin_dashboard',
     'rest_framework',
     'drf_yasg',

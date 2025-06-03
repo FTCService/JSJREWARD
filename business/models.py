@@ -8,7 +8,7 @@ class BusinessRewardRule(models.Model):
     ('purchase_value_to_points', 'Purchase Value to Points'),
     ('flat', 'Flat')
     ]
-
+    # RewardRuleId = models.IntegerField(verbose_name="Rule ID")
     RewardRuleBizId = models.IntegerField(verbose_name="Business ID")
     
     RewardRuleType = models.CharField(
@@ -33,6 +33,8 @@ class BusinessRewardRule(models.Model):
     CreatedAt = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
     UpdatedAt = models.DateTimeField(auto_now=True, verbose_name="Updated At")
 
+    
+        
     def __str__(self):
         return f"{self.RewardRuleBizId} - {self.RewardRuleType}"
     

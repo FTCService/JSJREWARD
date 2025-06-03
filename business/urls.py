@@ -12,6 +12,8 @@ urlpatterns = [
     path('reward-rule/<int:pk>/set-default/', views.SetDefaultRewardRuleAPI.as_view(), name='set-default-reward-rule'),
     path("reward-rules/<int:pk>/details/", views.BusinessRewardRuleDetailApi.as_view(), name="business-reward-rule-detail"),
 
+    
+    path("reward/rule/upload/", views.BulkBusinessRewardRuleUpload.as_view(), name="business-reward-rule"),
     path("business-card/", views.BusinessCardDesignAPI.as_view(), name="business-card-list"),
 
     path('new-member/', views.NewMemberEnrollAPI.as_view(), name='new-member'),

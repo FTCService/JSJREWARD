@@ -29,6 +29,100 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Avg, Count
 from rest_framework.exceptions import ValidationError
 from .authentication import SSOBusinessTokenAuthentication
+import csv, io
+
+class BulkBusinessRewardRuleUpload(APIView):
+    def post(self, request, *args, **kwargs):
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"error": "CSV file is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        data_set = file.read().decode("UTF-8")
+        io_string = io.StringIO(data_set)
+        csv_reader = csv.DictReader(io_string)
+
+        created_rules = []
+
+        for row in csv_reader:
+            try:
+                reward_rule = BusinessRewardRule.objects.create(
+                    id=row.get("id"),
+                    RewardRuleBizId=int(row.get("RewardRuleBizId")),
+                    RewardRuleType=row.get("RewardRuleType"),
+                    RewardRuleNotionalValue=row.get("RewardRuleNotionalValue"),
+                    RewardRuleValue=row.get("RewardRuleValue") or None,
+                    RewardRuleValidityPeriodYears=row.get("RewardRuleValidityPeriodYears") or None,
+                    RewardRuleMilestone=row.get("RewardRuleMilestone") or None,
+                    RewardRuleIsDefault=row.get("RewardRuleIsDefault", "False").lower() in ["true", "1"]
+                )
+                created_rules.append(reward_rule.id)
+
+            except Exception as e:
+                return Response({
+                    "error": f"Failed to process row: {row}",
+                    "details": str(e)
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "message": f"{len(created_rules)} reward rules uploaded successfully.",
+            "reward_rule_ids": created_rules
+        }, status=status.HTTP_201_CREATED)
+
+
+class BulkBusinessMemberUpload(APIView):
+    def post(self, request, *args, **kwargs):
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"error": "CSV file is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        data_set = file.read().decode("UTF-8")
+        io_string = io.StringIO(data_set)
+        csv_reader = csv.DictReader(io_string)
+
+        created_members = []
+
+        for row in csv_reader:
+            try:
+                # Validate Rule ID exists
+                rule_id = row.get("BizMbrRuleId")
+                try:
+                    reward_rule = BusinessRewardRule.objects.get(id=rule_id)
+                except BusinessRewardRule.DoesNotExist:
+                    return Response({
+                        "error": f"Reward Rule with ID {rule_id} does not exist.",
+                        "row": row
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # Parse BizMbrValidityEnd date if provided
+                validity_end = row.get("BizMbrValidityEnd")
+                validity_end_date = None
+                if validity_end:
+                    validity_end_date = datetime.fromisoformat(validity_end)
+
+                # Create BusinessMember object
+                member = BusinessMember.objects.create(
+                    id = row.get("id"),
+                    BizMbrBizId=int(row.get("BizMbrBizId")),
+                    BizMbrCardNo=int(row.get("BizMbrCardNo")),
+                    BizMbrRuleId=reward_rule,
+                    BizMbrIsActive=row.get("BizMbrIsActive", "False").lower() in ["true", "1"],
+                    BizMbrValidityEnd=validity_end_date
+                )
+
+                created_members.append(member.id)
+
+            except Exception as e:
+                return Response({
+                    "error": f"Failed to process row: {row}",
+                    "details": str(e)
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "message": f"{len(created_members)} business members uploaded successfully.",
+            "member_ids": created_members
+        }, status=status.HTTP_201_CREATED)
+
+
 
 # -------------------  business setup rules for reward cards of members  ------------------------
 class BusinessRewardRuleListCreateApi(APIView):
@@ -237,7 +331,7 @@ class BusinessCardDesignAPI(APIView):
                 {"error": "Only businesses can create Business Card Designs."},
                 status=status.HTTP_403_FORBIDDEN
             )
-
+        
        
         business_instance = request.user.business_id
         
@@ -251,7 +345,7 @@ class BusinessCardDesignAPI(APIView):
             CardDsgBizId=business_instance,  # Ensure linking to business instance
             defaults=data  # Update fields if exists, otherwise create
         )
-
+        
         return Response(
             {
                 "message": "Business Card Design created successfully" if created else "Business Card Design updated successfully",

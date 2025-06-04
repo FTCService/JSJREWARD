@@ -985,7 +985,7 @@ class SpecificCardTransactionApi(APIView):
                     "cumulative_points": cumulative_data,
                     "reward_info": reward_info
                 },
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_200_OK
             )
 
         transaction_serializer = CardTransactionSerializer(transactions, many=True)

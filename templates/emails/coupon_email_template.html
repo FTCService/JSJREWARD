@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Your Survey Coupon</title>
+</head>
+<body>
+    <h2>Hello {{ name|default:"User" }},</h2>
+    <p>Thank you for submitting the survey!</p>
+    <p>As a token of our appreciation, here is your coupon code:</p>
+    <h3 style="color: green;">{{ coupon }}</h3>
+    <p>Use this code on your next purchase.</p>
+    <br>
+    <p>Regards,<br><strong>Rewards Management Team</strong></p>
+</body>
+</html>

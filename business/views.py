@@ -1041,7 +1041,7 @@ class RedeemPointsAPIView(APIView):
         try:
             cumulative_points = CumulativePoints.objects.get(
                 CmltvPntsMbrCardNo=card_number,
-                # CmltvPntsBizId=business_id
+                CmltvPntsBizId=business_id
             )
         except CumulativePoints.DoesNotExist:
             return Response(

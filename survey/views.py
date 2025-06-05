@@ -14,29 +14,14 @@ class SurveySubmitAPI(APIView):
         operation_description="Submit answers to the survey and receive a coupon if phone number is used for the first time.",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
-            required=["questions"],
+            required=["answers"],
             properties={
                 "name": openapi.Schema(type=openapi.TYPE_STRING),
                 "email": openapi.Schema(type=openapi.TYPE_STRING, format='email'),
                 "phone": openapi.Schema(type=openapi.TYPE_STRING),
-                "questions": openapi.Schema(
+                "answers": openapi.Schema(
                     type=openapi.TYPE_OBJECT,
-                    additional_properties=openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            "Qestion": openapi.Schema(type=openapi.TYPE_STRING),
-                            "options": openapi.Schema(
-                                type=openapi.TYPE_ARRAY,
-                                items=openapi.Schema(
-                                    type=openapi.TYPE_OBJECT,
-                                    properties={
-                                        "text": openapi.Schema(type=openapi.TYPE_STRING),
-                                        "is_selected": openapi.Schema(type=openapi.TYPE_BOOLEAN)
-                                    }
-                                )
-                            )
-                        }
-                    )
+                    additional_properties=openapi.Schema(type=openapi.TYPE_STRING)
                 )
             }
         ),
@@ -56,17 +41,14 @@ class SurveySubmitAPI(APIView):
         phone = raw_data.get("phone")
         name = raw_data.get("name", "")
         email = raw_data.get("email", "")
-        questions_data = raw_data.get("questions", {})
+        questions_data = raw_data.get("answers", {})  # Changed from "questions"
 
-        if phone and email:
-            SurveySubmission.objects.all().delete()
-            existing_submission = SurveySubmission.objects.filter(phone=phone).first()
-        else:
-            existing_submission = None
+        # ✅ DO NOT DELETE ALL SUBMISSIONS
+        existing_submission = SurveySubmission.objects.filter(phone=phone).first()
 
         if existing_submission:
-            # Second or later submission - no coupon, save questions
-            submission = SurveySubmission.objects.create(
+            # Second or later submission
+            SurveySubmission.objects.create(
                 name=name or None,
                 email=email or None,
                 phone=phone or None,
@@ -75,13 +57,10 @@ class SurveySubmitAPI(APIView):
             )
             message = "Thank you for re-taking the survey."
         else:
-            # First submission with phone+email - generate coupon
-            if phone and email:
-                coupon = f"COUPON-{uuid.uuid4().hex[:8].upper()}"
-            else:
-                coupon = None
+            # First-time submission
+            coupon = f"COUPON-{uuid.uuid4().hex[:8].upper()}" if phone and email else None
 
-            submission = SurveySubmission.objects.create(
+            SurveySubmission.objects.create(
                 name=name or None,
                 email=email or None,
                 phone=phone or None,
@@ -90,19 +69,11 @@ class SurveySubmitAPI(APIView):
             )
 
             if coupon:
-               
-                # Render the email body as HTML string
                 html_body = render_to_string("emails/coupon_email_template.html", {
-
                     "name": name,
                     "coupon": coupon
                 })
-
-                subject = "Your Survey Coupon Code"
-
-                # Send the email using your custom API
-                send_cupon_email(email, subject, html_body)
-                
+                send_cupon_email(email, "Your Survey Coupon Code", html_body)
                 message = f"Check your email for coupons. Your code: {coupon}"
             else:
                 message = "Thank you for submitting the survey."

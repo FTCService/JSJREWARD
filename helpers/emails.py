@@ -5,11 +5,11 @@ def send_cupon_email(email, subject, html_body):
     """
     Send an email using the external BulkEmail API.
     """
-    api_url = "https://jfe0fa6le4.execute-api.ap-south-1.amazonaws.com/Version1/BulkEmail/"
+    api_url = "https://w1yg18jn76.execute-api.ap-south-1.amazonaws.com/default/sesapi"
 
-    # Ensure the recipient email is clean
-    if email.endswith(".com.com"):
-        email = email.replace(".com.com", ".com")
+    # # Ensure the recipient email is clean
+    # if email.endswith(".com.com"):
+    #     email = email.replace(".com.com", ".com")
 
     # URL encode subject and body
     encoded_subject = urllib.parse.quote(subject)
@@ -17,7 +17,7 @@ def send_cupon_email(email, subject, html_body):
 
     try: 
         # Construct the full URL with query parameters
-        full_url = f"{api_url}?sender=kumarnitishjha8877@gmail.com&recipient={email}&subject={encoded_subject}&body={encoded_body}"
+        full_url = f"{api_url}?sender=avinash.singh.270504@gmail.com&recipient={email}&subject={encoded_subject}&body={encoded_body}"
 
         response = requests.get(full_url)
 

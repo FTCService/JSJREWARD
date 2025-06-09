@@ -58,7 +58,18 @@ class BusinessMember(models.Model):
         verbose_name = "Business Member"
         verbose_name_plural = "Business Members"
         
-        
+class MemberJoinRequest(models.Model):
+    business = models.IntegerField(verbose_name="Business ID")
+    card_number = models.BigIntegerField(verbose_name="Member Card Number")
+    full_name = models.CharField(max_length=255, null=True, blank=True)
+    mobile_number = models.CharField(max_length=15, null=True, blank=True)
+    is_approved = models.BooleanField(default=False)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"JoinRequest: {self.card_number} to Business {self.business}"
+
 
 class CardTransaction(models.Model):
     TRANSACTION_TYPE_CHOICES = [

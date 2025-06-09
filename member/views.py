@@ -6,9 +6,9 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from .authentication import SSOMemberTokenAuthentication
 from business.serializers import CardTransactionSerializer
-from business.models import BusinessMember, BusinessCardDesign, CumulativePoints,CardTransaction
+from business.models import BusinessMember, BusinessCardDesign, CumulativePoints,CardTransaction, MemberJoinRequest
 from .serializers import MemberBusinessSotreSerializer, CumulativePointsSerializer
-from helpers.utils import get_business_details_by_id
+from helpers.utils import get_business_details_by_id, get_member_details_by_card
 from django.utils import timezone
 from django.db.models import Q
 
@@ -380,3 +380,47 @@ class TransactionDetailApi(APIView):
 
         serializer = CardTransactionSerializer(transaction)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+class MemberQRScanAPIView(APIView):
+    """
+    API to handle member scanning business QR code.
+    If member exists, create a join request.
+    """
+    authentication_classes = [SSOMemberTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        business_id = request.data.get("Biz_Id")
+        card_number = request.user.mbrcardno
+
+        if not business_id or not card_number:
+            return Response({"success": False, "error": "Biz_Id and card_number required."}, status=400)
+
+        try:
+            # Check if member exists
+            member_data = get_member_details_by_card(card_number)
+            if not member_data:
+                return Response({"success": False, "error": "Member does not exist."}, status=404)
+
+            # Create a join request to business
+            join_request = MemberJoinRequest.objects.create(
+                business=business_id,
+                card_number=card_number,
+                full_name=member_data.get("full_name"),
+                mobile_number=member_data.get("mobile_number")
+            )
+
+            # TODO: Optionally notify business (via email or dashboard)
+
+            return Response({
+                "success": True,
+                "message": "Request sent to business.",
+                "data": {
+                    "card_number": card_number,
+                    "business_id": business_id
+                }
+            }, status=201)
+
+        except Exception as e:
+            return Response({"success": False, "error": str(e)}, status=500)

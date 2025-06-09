@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from business.models import BusinessRewardRule, BusinessMember, CardTransaction, BusinessCardDesign,CumulativePoints
+from business.models import BusinessRewardRule, BusinessMember, CardTransaction, BusinessCardDesign,MemberJoinRequest
 from django.core.validators import MinValueValidator, MaxValueValidator
 import re
 from rest_framework.authentication import BaseAuthentication
@@ -210,3 +210,8 @@ class MemberByCardSerializer(serializers.Serializer):
    
         
 
+
+class MemberJoinRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MemberJoinRequest
+        fields = '__all__'

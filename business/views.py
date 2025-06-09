@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from business.models import BusinessRewardRule,BusinessMember, CardTransaction, BusinessCardDesign, CumulativePoints
+from business.models import BusinessRewardRule,BusinessMember, CardTransaction, BusinessCardDesign, CumulativePoints, MemberJoinRequest
 from .serializers import (
                           BusinessRewardRuleSerializer, 
                           BusinessMemberSerializer,
@@ -17,10 +17,10 @@ from .serializers import (
                           SpecificCardTransactionSerializer,
                           CheckMemberActiveSerializer,
                           MemberByCardSerializer,
-                          BusinessMemberSerializer
+                          BusinessMemberSerializer,
+                          MemberJoinRequestSerializer
                           
                           )
-
 from helpers.utils import send_sms, get_member_details_by_mobile, get_member_details_by_card
 from datetime import datetime, timedelta
 from django.db.models import Q
@@ -30,6 +30,7 @@ from django.db.models import Sum, Avg, Count
 from rest_framework.exceptions import ValidationError
 from .authentication import SSOBusinessTokenAuthentication
 import csv, io
+from django.utils import timezone
 
 class BulkBusinessRewardRuleUpload(APIView):
     def post(self, request, *args, **kwargs):
@@ -1147,3 +1148,57 @@ class BusinessReportsAPIView(APIView):
             "total_transaction_amount": total_transaction_amount,
             "average_transaction_amount": credit_avg_transaction_amount
         }, status=status.HTTP_200_OK)
+        
+        
+
+class ApproveJoinRequestView(APIView):
+    authentication_classes = [SSOBusinessTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="List all pending member join requests for the authenticated business.",
+        responses={200: MemberJoinRequestSerializer(many=True)}
+    )
+    def get(self, request):
+        business_id = request.user.business_id
+        pending_requests = MemberJoinRequest.objects.filter(business=business_id, is_approved=False)
+        serializer = MemberJoinRequestSerializer(pending_requests, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        operation_description="Approve a specific join request by request_id.",
+        manual_parameters=[
+            openapi.Parameter(
+                'request_id',
+                openapi.IN_PATH,
+                description="ID of the join request",
+                type=openapi.TYPE_INTEGER
+            )
+        ],
+        responses={
+            200: openapi.Response(description="Member approved and added."),
+            404: openapi.Response(description="Join request not found.")
+        }
+    )
+    def post(self, request, request_id):
+        try:
+            join_request = MemberJoinRequest.objects.get(id=request_id)
+
+            # Approve and save the join request
+            join_request.is_approved = True
+            join_request.responded_at = timezone.now()
+            join_request.save()
+
+            # Add member to BusinessMember model
+            # BusinessMember.objects.create(
+            #     BizMbrBizId=join_request.business,
+            #     BizMbrCardNo=join_request.card_number,
+            #     BizMbrIsActive=True,
+            #     BizMbrIssueDate=timezone.now(),
+            #     BizMbrValidityEnd=timezone.now() + timedelta(days=365)
+            # )
+
+            return Response({"success": True, "message": "Member approved ", "card_number":join_request.card_number,}, status=200)
+
+        except MemberJoinRequest.DoesNotExist:
+            return Response({"success": False, "error": "Join request not found."}, status=404)

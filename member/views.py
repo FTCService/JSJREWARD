@@ -159,7 +159,7 @@ class BusinessStoreDetailsApi(APIView):
         ).first()
 
         if not cumulative_points:
-            return Response({"error": "No cumulative points found for this member and business."}, status=status.HTTP_200_OK)
+            return Response({"message": "No cumulative points found for this member and business."}, status=status.HTTP_200_OK)
 
         mbr_card_no = request.user.mbrcardno
         full_name = request.user.full_name

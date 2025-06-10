@@ -1150,8 +1150,7 @@ class BusinessReportsAPIView(APIView):
         }, status=status.HTTP_200_OK)
         
         
-
-class ApproveJoinRequestView(APIView):
+class MemberRequestListApi(APIView):
     authentication_classes = [SSOBusinessTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -1164,6 +1163,13 @@ class ApproveJoinRequestView(APIView):
         pending_requests = MemberJoinRequest.objects.filter(business=business_id, is_approved=False)
         serializer = MemberJoinRequestSerializer(pending_requests, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+    
+    
+class ApproveJoinRequestView(APIView):
+    authentication_classes = [SSOBusinessTokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_description="Approve a specific join request by request_id.",

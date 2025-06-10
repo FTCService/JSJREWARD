@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.db.models import Q
 
 
+
 class BusinessStoreListApi(APIView):
     """
     List all Business stores for the logged-in member along with card design details.
@@ -384,87 +385,164 @@ class TransactionDetailApi(APIView):
     
 class MemberQRScanAPIView(APIView):
     """
-    API to handle member scanning business QR code.
-    If member exists, create a join request.
-    """
-    authentication_classes = [SSOMemberTokenAuthentication]
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        business_id = request.data.get("Biz_Id")
-        card_number = request.user.mbrcardno
-
-        if not business_id or not card_number:
-            return Response({"success": False, "error": "Biz_Id and card_number required."}, status=400)
-
-        try:
-            # Check if member exists
-            member_data = get_member_details_by_card(card_number)
-            if not member_data:
-                return Response({"success": False, "error": "Member does not exist."}, status=404)
-
-            # Create a join request to business
-            join_request = MemberJoinRequest.objects.create(
-                business=business_id,
-                card_number=card_number,
-                full_name=member_data.get("full_name"),
-                mobile_number=member_data.get("mobile_number")
-            )
-
-            # TODO: Optionally notify business (via email or dashboard)
-
-            return Response({
-                "success": True,
-                "message": "Request sent to business.",
-                "data": {
-                    "card_number": card_number,
-                    "business_id": business_id
-                }
-            }, status=201)
-
-        except Exception as e:
-            return Response({"success": False, "error": str(e)}, status=500)
-
-
-
-class MemberActiveInnBusiness(APIView):
-    """
-    API to check if a member is active based on the provided card number.
+    API for member scanning a business QR code.
+    - GET: Check if the member is active in the business.
+    - POST: If not active, send a join request to the business.
     """
     authentication_classes = [SSOMemberTokenAuthentication]
     permission_classes = [IsAuthenticated]
 
-    @swagger_auto_schema(
-        operation_description="Check if a member is active based on the provided business Id.",
-        responses={200: SelfMemberActiveSerializer()}
-    )
     def get(self, request):
         """
-        Check if a member is active.
+        Check if a member is already active in a business.
         """
-        
-        Biz_Id = request.query_params.get("Biz_Id")  # Get card number from request
+        Biz_Id = request.query_params.get("Biz_Id")
+        card_number = request.user.mbrcardno
 
         if not Biz_Id:
             return Response(
-                {"success": False, "error": "business id is required."},
+                {"success": False, "error": "Biz_Id is required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        card_number = request.user.mbrcardno  
-        
-        # Get the first active member if multiple exist
-        business_member = BusinessMember.objects.filter(BizMbrCardNo=card_number,
-            BizMbrBizId=Biz_Id ).first()
-
-        if not business_member:  # Handle case where no member is found
+        try:
+            Biz_Id = int(Biz_Id)
+        except ValueError:
             return Response(
-                {"success": False, "message": "No active member found for this business.", "BizMbrIsActive": False},
-                status=status.HTTP_200_OK
+                {"success": False, "error": "Invalid Biz_Id format."},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-        serializer = SelfMemberActiveSerializer(business_member)
-        return Response(
-            {"success": True, "message": "Member found.", "data": serializer.data},
-            status=status.HTTP_200_OK
+        # Check if member is already active
+        business_member = BusinessMember.objects.filter(
+            BizMbrCardNo=card_number,
+            BizMbrBizId=Biz_Id
+        ).first()
+
+        if business_member:
+            serializer = SelfMemberActiveSerializer(business_member)
+            return Response({
+                "success": True,
+                "message": "Member is active in the business.",
+                "BizMbrIsActive": True,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                "success": False,
+                "message": "Member is not active in this business. Please scan a valid business QR or send a join request.",
+                "BizMbrIsActive": False
+            }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """
+        If member is not active, create a join request to the business.
+        """
+        business_id = request.data.get("Biz_Id")
+        card_number = request.user.mbrcardno
+
+        if not business_id:
+            return Response({"success": False, "error": "Biz_Id is required."}, status=400)
+
+        try:
+            business_id = int(business_id)
+        except ValueError:
+            return Response({"success": False, "error": "Invalid Biz_Id format."}, status=400)
+
+        # Check if already active
+        if BusinessMember.objects.filter(BizMbrCardNo=card_number, BizMbrBizId=business_id).exists():
+            return Response({
+                "success": True,
+                "message": "Member is already active in this business.",
+                "BizMbrIsActive": True
+            }, status=status.HTTP_200_OK)
+
+        # Optional: prevent duplicate join requests
+        if MemberJoinRequest.objects.filter(card_number=card_number, business=business_id, is_approved=False).exists():
+            return Response({
+                "success": False,
+                "message": "Join request already sent to this business.",
+            }, status=status.HTTP_409_CONFLICT)
+
+        # Get member details
+        member_data = get_member_details_by_card(card_number)
+        if not member_data:
+            return Response({"success": False, "error": "Member not found."}, status=404)
+
+        # Create join request
+        MemberJoinRequest.objects.create(
+            business=business_id,
+            card_number=card_number,
+            full_name=member_data.get("full_name"),
+            mobile_number=member_data.get("mobile_number"),
+            is_approved=False
         )
+
+        return Response({
+            "success": True,
+            "message": "Join request sent to business.",
+            # "BizMbrIsActive": False,
+            "card_number": card_number,
+            "business_id": business_id
+            
+        }, status=201)
+
+
+
+# class MemberActiveInnBusiness(APIView):
+#     """
+#     API to check if a member is active based on the provided business Id.
+#     """
+#     authentication_classes = [SSOMemberTokenAuthentication]
+#     permission_classes = [IsAuthenticated]
+
+#     @swagger_auto_schema(
+#         operation_description="Check if a member is active based on the provided business Id.",
+#         responses={200: SelfMemberActiveSerializer()}
+#     )
+#     def get(self, request):
+#         """
+#         Check if a member is active in a business using their card number.
+#         """
+#         Biz_Id = request.query_params.get("Biz_Id")
+#         if not Biz_Id:
+#             return Response(
+#                 {"success": False, "error": "Business ID is required."},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         try:
+#             Biz_Id = int(Biz_Id)
+#         except ValueError:
+#             return Response(
+#                 {"success": False, "error": "Invalid Business ID format."},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         card_number = request.user.mbrcardno
+#         print(f"Checking for card_number: {card_number} in Biz_Id: {Biz_Id}")
+
+#         business_member = BusinessMember.objects.filter(
+#             BizMbrCardNo=card_number,
+#             BizMbrBizId=Biz_Id
+#         ).first()
+
+#         if not business_member:
+#             return Response(
+#                 {
+#                     "success": False,
+#                     "message": "Member is not active in this business. Please scan a valid business QR ",
+#                     "BizMbrIsActive": False
+#                 },
+#                 status=status.HTTP_200_OK
+#             )
+
+#         serializer = SelfMemberActiveSerializer(business_member)
+#         return Response(
+#             {
+#                 "success": True,
+#                 "message": "Member is active in the business.",
+#                 "data": serializer.data
+#             },
+#             status=status.HTTP_200_OK
+#         )

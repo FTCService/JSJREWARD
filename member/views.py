@@ -412,7 +412,7 @@ class MemberQRScanAPIView(APIView):
                 {"success": False, "error": "Invalid Biz_Id format."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+        
         # Check if member is already active
         business_member = BusinessMember.objects.filter(
             BizMbrCardNo=card_number,
@@ -462,7 +462,7 @@ class MemberQRScanAPIView(APIView):
             return Response({
                 "success": False,
                 "message": "Join request already sent to this business.",
-            }, status=status.HTTP_409_CONFLICT)
+            }, status=status.HTTP_200_OK)
 
         # Get member details
         member_data = get_member_details_by_card(card_number)

@@ -33,7 +33,7 @@ urlpatterns = [
     
     path("business-reports/", views.BusinessReportsAPIView.as_view(), name="business_reports"),
     
-    path('member/join-requests/', views.ApproveJoinRequestView.as_view(), name='list-join-requests'),
+    path('member/join-requests/', views.MemberRequestListApi.as_view(), name='list-join-requests'),
     path('member/join-requests/approve/<int:request_id>/', views.ApproveJoinRequestView.as_view(), name='approve-join-request'),
   
 ]

@@ -438,7 +438,7 @@ class MemberQRScanAPIView(APIView):
         """
         If member is not active, create a join request to the business.
         """
-        business_id = request.data.get("Biz_Id")
+        business_id = request.query_params.get("Biz_Id")
         card_number = request.user.mbrcardno
 
         if not business_id:

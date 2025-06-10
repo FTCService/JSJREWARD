@@ -472,7 +472,7 @@ class NewMemberEnrollAPI(APIView):
             }
 
             # Generate signup link
-            base_url = "https://reward.jsjcard.com" if not settings.DEBUG else "http://127.0.0.1:8000"
+            base_url = "https://reward.jsjcard.com"
             signup_url = f"{base_url}/member/sign-up/?referId={refer_id}&name={full_name}&phone={mobile_number}"
 
             send_sms({

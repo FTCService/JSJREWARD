@@ -7,7 +7,7 @@ from drf_yasg import openapi
 from .authentication import SSOMemberTokenAuthentication
 from business.serializers import CardTransactionSerializer
 from business.models import BusinessMember, BusinessCardDesign, CumulativePoints,CardTransaction, MemberJoinRequest
-from .serializers import MemberBusinessSotreSerializer, CumulativePointsSerializer
+from .serializers import MemberBusinessSotreSerializer, CumulativePointsSerializer, CheckMemberActiveSerializer
 from helpers.utils import get_business_details_by_id, get_member_details_by_card
 from django.utils import timezone
 from django.db.models import Q
@@ -424,3 +424,47 @@ class MemberQRScanAPIView(APIView):
 
         except Exception as e:
             return Response({"success": False, "error": str(e)}, status=500)
+
+
+
+class MemberActiveInnBusiness(APIView):
+    """
+    API to check if a member is active based on the provided card number.
+    """
+    authentication_classes = [SSOMemberTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Check if a member is active based on the provided card number.",
+        responses={200: CheckMemberActiveSerializer()}
+    )
+    def get(self, request):
+        """
+        Check if a member is active.
+        """
+        
+        Biz_Id = request.query_params.get("Biz_Id")  # Get card number from request
+
+        if not Biz_Id:
+            return Response(
+                {"success": False, "error": "business id is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        card_number = request.user.mbrcardno  
+        
+        # Get the first active member if multiple exist
+        business_member = BusinessMember.objects.filter(BizMbrCardNo=card_number,
+            BizMbrBizId=Biz_Id ).first()
+
+        if not business_member:  # Handle case where no member is found
+            return Response(
+                {"success": False, "message": "No active member found for this business.", "BizMbrIsActive": False},
+                status=status.HTTP_200_OK
+            )
+
+        serializer = CheckMemberActiveSerializer(business_member)
+        return Response(
+            {"success": True, "message": "Member found.", "data": serializer.data},
+            status=status.HTTP_200_OK
+        )

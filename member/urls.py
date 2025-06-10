@@ -14,6 +14,6 @@ urlpatterns = [
     path('transactions/<int:biz_id>/', views.MemberTransactionHistoryApi.as_view(), name='member-transactions'),
     path('transaction/<int:biz_id>/<int:transaction_id>/', views.TransactionDetailApi.as_view(), name='transaction-detail'),
     
-    path('active/in/business', views.MemberActiveInnBusiness.as_view(), name='member-active'),
+    path('member/self/active-in-business/', views.MemberActiveInnBusiness.as_view(), name='member-active'),
      
 ]

@@ -26,7 +26,7 @@ class CumulativePointsSerializer(serializers.ModelSerializer):
         ]
 
 
-class CheckMemberActiveSerializer(serializers.ModelSerializer):
+class SelfMemberActiveSerializer(serializers.ModelSerializer):
     # BizMbrCardNo = serializers.CharField(source="BizMbrCardNo.mbrcardno")  # Get card number from related Member model
 
     class Meta:

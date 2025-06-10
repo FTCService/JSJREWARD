@@ -7,7 +7,7 @@ from drf_yasg import openapi
 from .authentication import SSOMemberTokenAuthentication
 from business.serializers import CardTransactionSerializer
 from business.models import BusinessMember, BusinessCardDesign, CumulativePoints,CardTransaction, MemberJoinRequest
-from .serializers import MemberBusinessSotreSerializer, CumulativePointsSerializer, CheckMemberActiveSerializer
+from .serializers import MemberBusinessSotreSerializer, CumulativePointsSerializer, SelfMemberActiveSerializer
 from helpers.utils import get_business_details_by_id, get_member_details_by_card
 from django.utils import timezone
 from django.db.models import Q
@@ -435,8 +435,8 @@ class MemberActiveInnBusiness(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="Check if a member is active based on the provided card number.",
-        responses={200: CheckMemberActiveSerializer()}
+        operation_description="Check if a member is active based on the provided business Id.",
+        responses={200: SelfMemberActiveSerializer()}
     )
     def get(self, request):
         """
@@ -463,7 +463,7 @@ class MemberActiveInnBusiness(APIView):
                 status=status.HTTP_200_OK
             )
 
-        serializer = CheckMemberActiveSerializer(business_member)
+        serializer = SelfMemberActiveSerializer(business_member)
         return Response(
             {"success": True, "message": "Member found.", "data": serializer.data},
             status=status.HTTP_200_OK

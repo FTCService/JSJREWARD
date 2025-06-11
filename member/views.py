@@ -93,8 +93,8 @@ class BusinessStoreListApi(APIView):
 
 class BusinessStoreDetailsApi(APIView):
     """
-    List all Business stores for the logged-in member along with their card design, cumulative points, 
-    milestone progress, and real-time eligibility status.
+    List all Business stores for the logged-in member along with their card design,
+    cumulative points, milestone progress, and real-time eligibility status.
     """
     authentication_classes = [SSOMemberTokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -133,6 +133,7 @@ class BusinessStoreDetailsApi(APIView):
                         "AchievedMilestones": openapi.Schema(type=openapi.TYPE_INTEGER, description="How many times milestone achieved"),
                         "PointsToNextMilestone": openapi.Schema(type=openapi.TYPE_NUMBER, description="Points needed for next milestone"),
                         "IsEligible": openapi.Schema(type=openapi.TYPE_BOOLEAN, description="Is member eligible for redemption"),
+                        "RewardInfo": openapi.Schema(type=openapi.TYPE_OBJECT, description="Reward Info", additional_properties=True),
                     }
                 )
             ),
@@ -144,41 +145,45 @@ class BusinessStoreDetailsApi(APIView):
         if not biz_id:
             return Response({"error": "BizMbrBizId parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        
         business = get_business_details_by_id(biz_id)
-        print(business,"===================")
         if not business:
             return Response({"error": "Business not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        business_name=business.get("business_name")
+        business_name = business.get("business_name")
+
         # Card design
         card_design = BusinessCardDesign.objects.filter(CardDsgBizId=biz_id).first()
 
         # Points and member info
         cumulative_points = CumulativePoints.objects.filter(
-            CmltvPntsMbrCardNo=request.user.mbrcardno, CmltvPntsBizId=biz_id
+            CmltvPntsMbrCardNo=request.user.mbrcardno,
+            CmltvPntsBizId=biz_id
         ).first()
-
-        if not cumulative_points:
-            return Response({"message": "No cumulative points found for this member and business."}, status=status.HTTP_200_OK)
 
         mbr_card_no = request.user.mbrcardno
         full_name = request.user.full_name
-        earned = cumulative_points.LifetimeEarnedPoints or 0
-        current_balance = cumulative_points.CurrentBalance or 0
-        redeemed = cumulative_points.LifetimeRedeemedPoints or 0
-        total_purchase = cumulative_points.TotalPurchaseAmount or 0
+
+        if cumulative_points:
+            earned = cumulative_points.LifetimeEarnedPoints or 0
+            current_balance = cumulative_points.CurrentBalance or 0
+            redeemed = cumulative_points.LifetimeRedeemedPoints or 0
+            total_purchase = cumulative_points.TotalPurchaseAmount or 0
+        else:
+            earned = current_balance = redeemed = total_purchase = 0
 
         # Milestone logic
         milestone_value = 0
         achieved_milestones = 0
         points_to_next_milestone = 0
         is_eligible = False
+        reward_info = None
 
         biz_member = BusinessMember.objects.filter(
-            BizMbrBizId=biz_id, BizMbrCardNo=request.user.mbrcardno, BizMbrIsActive=True
+            BizMbrBizId=biz_id,
+            BizMbrCardNo=request.user.mbrcardno,
+            BizMbrIsActive=True
         ).select_related("BizMbrRuleId").first()
-        reward_info = None
+
         if biz_member and biz_member.BizMbrRuleId:
             reward_rule = biz_member.BizMbrRuleId
             milestone_value = reward_rule.RewardRuleMilestone or 0
@@ -187,12 +192,14 @@ class BusinessStoreDetailsApi(APIView):
                 achieved_milestones = earned // milestone_value
                 points_to_next_milestone = milestone_value - (earned % milestone_value)
                 is_eligible = current_balance >= milestone_value
+
             reward_info = {
-                    "RewardRuleId": reward_rule.id,
-                    "RewardRuleType": reward_rule.RewardRuleType,
-                    "RewardRuleNotionalValue": reward_rule.RewardRuleNotionalValue,
-                    "RewardRuleValue": reward_rule.RewardRuleValue
-                }
+                "RewardRuleId": reward_rule.id,
+                "RewardRuleType": reward_rule.RewardRuleType,
+                "RewardRuleNotionalValue": reward_rule.RewardRuleNotionalValue,
+                "RewardRuleValue": reward_rule.RewardRuleValue
+            }
+
         response_data = {
             "BizMbrBizId": biz_id,
             "business_name": business_name,
@@ -211,7 +218,7 @@ class BusinessStoreDetailsApi(APIView):
             "AchievedMilestones": achieved_milestones,
             "PointsToNextMilestone": points_to_next_milestone if current_balance < milestone_value else 0,
             "IsEligible": is_eligible,
-            "RewardInfo": reward_info  
+            "RewardInfo": reward_info
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
@@ -430,7 +437,7 @@ class MemberQRScanAPIView(APIView):
         else:
             return Response({
                 "success": False,
-                "message": "Member is not active in this business. Please scan a valid business QR or send a join request.",
+                "message": "You're just a join request away from exclusive discounts and becoming a loyal customer.",
                 "BizMbrIsActive": False
             }, status=status.HTTP_200_OK)
 

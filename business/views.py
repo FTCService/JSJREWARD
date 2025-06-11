@@ -528,7 +528,7 @@ class MemberDetailByCardNumberApi(APIView):
 
         # Fetch cumulative points
         cumulative_points = CumulativePoints.objects.filter(
-            CmltvPntsMbrCardNo=card_number
+            CmltvPntsMbrCardNo=card_number, CmltvPntsBizId=request.user.business_id
         ).first()
 
         # Prepare response data

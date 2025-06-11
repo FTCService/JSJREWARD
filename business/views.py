@@ -869,30 +869,108 @@ class CardTransactionApi(APIView):
 
     @swagger_auto_schema(responses={200: CardTransactionSerializer(many=True)})
     def get(self, request):
-        """Retrieve all Card Transactions for the logged-in business."""
         transactions = CardTransaction.objects.filter(CrdTrnsBizId=request.user.business_id)
         serializer = CardTransactionSerializer(transactions, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(request_body=CardTransactionSerializer)
     def post(self, request):
-        """Create a new Card Transaction and auto-assign the Business ID."""
-        serializer = CardTransactionSerializer(data=request.data, context={"request": request})
+        data = request.data.copy()
+        data["CrdTrnsBizId"] = request.user.business_id
 
+        serializer = CardTransactionSerializer(data=data)
         if serializer.is_valid():
-            transaction = serializer.save()
-            return Response(
-                {
+            try:
+                # Extract validated data
+                validated_data = serializer.validated_data
+
+                # Create transaction object manually
+                transaction = CardTransaction(
+                    CrdTrnsBizId=request.user.business_id,
+                    CrdTrnsCardNumber=validated_data["CrdTrnsCardNumber"],
+                    CrdTrnsPurchaseAmount=validated_data["CrdTrnsPurchaseAmount"],
+                    CrdTrnsTransactionType=validated_data["CrdTrnsTransactionType"],
+                )
+
+                # Default points
+                transaction.CrdTrnsPoint = 0
+
+                # 🔢 Point Calculation Logic
+                business_member = BusinessMember.objects.filter(
+                    BizMbrCardNo=transaction.CrdTrnsCardNumber,
+                    BizMbrBizId=transaction.CrdTrnsBizId,
+                    BizMbrIsActive=True
+                ).select_related("BizMbrRuleId").first()
+
+                reward_rule = None
+                if business_member and business_member.BizMbrRuleId:
+                    reward_rule = business_member.BizMbrRuleId
+                    reward_notional_value = float(reward_rule.RewardRuleNotionalValue or 1)
+                    reward_value = float(reward_rule.RewardRuleValue or 1)
+
+                    if reward_rule.RewardRuleType == "percentage":
+                        transaction.CrdTrnsPoint = int((transaction.CrdTrnsPurchaseAmount * reward_value) / 100)
+                    elif reward_rule.RewardRuleType == "purchase_value_to_points":
+                        transaction.CrdTrnsPoint = int((transaction.CrdTrnsPurchaseAmount * reward_value) / 100)
+                    elif reward_rule.RewardRuleType == "flat":
+                        transaction.CrdTrnsPoint = int(reward_value)
+
+                # Save the transaction
+                transaction.save()
+
+                # 💡 Update Cumulative Points
+                cumulative_points, created = CumulativePoints.objects.get_or_create(
+                    CmltvPntsMbrCardNo=transaction.CrdTrnsCardNumber,
+                    CmltvPntsBizId=transaction.CrdTrnsBizId,
+                    defaults={
+                        "LifetimeEarnedPoints": 0,
+                        "CurrentBalance": 0,
+                        "TotalPurchaseAmount": 0,
+                        "LifetimeRedeemedPoints": 0,
+                    }
+                )
+
+                if transaction.CrdTrnsTransactionType == "Points_Earned":
+                    cumulative_points.LifetimeEarnedPoints += transaction.CrdTrnsPoint
+                    cumulative_points.CurrentBalance += transaction.CrdTrnsPoint
+                    cumulative_points.TotalPurchaseAmount += transaction.CrdTrnsPurchaseAmount
+
+                elif transaction.CrdTrnsTransactionType == "Points_Redeemed":
+                    milestone = reward_rule.RewardRuleMilestone if reward_rule and reward_rule.RewardRuleMilestone else 0
+                    required_points = milestone if milestone > 0 else transaction.CrdTrnsPoint
+
+                    if cumulative_points.CurrentBalance >= required_points:
+                        cumulative_points.LifetimeRedeemedPoints += required_points
+                        cumulative_points.CurrentBalance -= required_points
+                    else:
+                        return Response({
+                            "success": False,
+                            "message": "Insufficient points for redemption."
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                cumulative_points.save()
+
+                return Response({
                     "success": True,
                     "message": "Transaction recorded successfully.",
                     "transaction_id": transaction.id,
                     "business_id": request.user.business_id,
                     "business_name": request.user.business_name,
-                },
-                status=status.HTTP_201_CREATED
-            )
+                }, status=status.HTTP_201_CREATED)
+
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return Response({
+                    "success": False,
+                    "message": "An error occurred while processing the transaction.",
+                    "error": str(e),
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
     
     
     

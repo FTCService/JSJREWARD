@@ -164,19 +164,7 @@ class CardTransactionSerializer(serializers.ModelSerializer):
         model = CardTransaction
         fields = "__all__"
 
-    def create(self, validated_data):
-        request = self.context.get("request")  # Get request from context
-        
     
-        business_instance = request.user.business_id
-        
-
-        validated_data["CrdTrnsBizId"] = business_instance  # Assign business instance
-
-        transaction = CardTransaction(**validated_data)
-        transaction.calculate_points()  # Auto-calculate points
-        transaction.save()
-        return transaction
 
 
  

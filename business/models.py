@@ -189,10 +189,10 @@ class BusinessCardDesign(models.Model):
 class CumulativePoints(models.Model):
     CmltvPntsMbrCardNo = models.BigIntegerField(verbose_name="Member Card Number")  # Changed to BigIntegerField
     CmltvPntsBizId = models.IntegerField(verbose_name="Business ID")
-    LifetimeEarnedPoints = models.FloatField(default=0.00)
-    LifetimeRedeemedPoints = models.FloatField(default=0.00)
-    CurrentBalance = models.FloatField(default=0.00)
-    TotalPurchaseAmount = models.FloatField(default=0.00)
+    LifetimeEarnedPoints = models.FloatField()
+    LifetimeRedeemedPoints = models.FloatField()
+    CurrentBalance = models.FloatField()
+    TotalPurchaseAmount = models.FloatField()
     LastUpdated = models.DateTimeField(auto_now=True)
 
     def __str__(self):

@@ -1282,7 +1282,7 @@ class ApproveJoinRequestView(APIView):
             #     BizMbrValidityEnd=timezone.now() + timedelta(days=365)
             # )
 
-            return Response({"success": True, "message": "Member approved ", "card_number":join_request.card_number,}, status=200)
+            return Response({"success": True, "message": "Member approved ", "card_number":join_request.card_number,"BizMbrIsActive": False,}, status=200)
 
         except MemberJoinRequest.DoesNotExist:
             return Response({"success": False, "error": "Join request not found."}, status=404)

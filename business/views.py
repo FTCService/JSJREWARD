@@ -1238,7 +1238,7 @@ class MemberRequestListApi(APIView):
     )
     def get(self, request):
         business_id = request.user.business_id
-        pending_requests = MemberJoinRequest.objects.filter(business=business_id, is_approved=True)
+        pending_requests = MemberJoinRequest.objects.filter(business=business_id)
         serializer = MemberJoinRequestSerializer(pending_requests, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     

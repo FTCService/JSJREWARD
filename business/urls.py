@@ -5,7 +5,7 @@ from . import views
 
 
 urlpatterns = [
-    
+    path('cardno/member-details/', views.MemberDetailsByCardAPI.as_view(), name='member-details-by-card'),
     path('member/active_in_clube/', views.BusinessMembercheckActiveAPI.as_view(), name='member-active_in_clube'),
 
     path("business-reward-rules/", views.BusinessRewardRuleListCreateApi.as_view(), name="business-reward-rules"),

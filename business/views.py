@@ -22,6 +22,7 @@ from .serializers import (
                           
                           )
 from helpers.utils import send_sms, get_member_details_by_mobile, get_member_details_by_card
+from helpers.card_utils import get_primary_card_from_remote
 from datetime import datetime, timedelta
 from django.db.models import Q
 from django.db import IntegrityError
@@ -382,25 +383,6 @@ class BusinessCardDesignAPI(APIView):
     
     
     
-# class NewMemberEnrollAPI(APIView):
-#     def post(self, request):
-#         mobile_number = request.data.get("mobile_number")
-#         if not mobile_number:
-#             return Response({"message": "Mobile number is required."})
-
-#         member_data = get_member_details_by_mobile(mobile_number)
-#         if not member_data:
-#             return Response({"message": "Member not found."}, status=200)
-
-#         # You now have full member data from auth service
-#         mbrcardno = member_data.get("mbrcardno")
-#         full_name = member_data.get("full_name")
-#         # ... use other fields as needed
-
-#         return Response({"success": True, "member": member_data,"mbrcardno":mbrcardno,"full_name":full_name})
-    
-
-
 
 class NewMemberEnrollAPI(APIView):
     """
@@ -502,41 +484,58 @@ class MemberDetailByCardNumberApi(APIView):
     def get(self, request, card_number):
         if not card_number:
             return Response({"error": "Card number is required."}, status=status.HTTP_400_BAD_REQUEST)
-        # card_number= 8835846533625056
-        # Fetch member data from external AUTH service
-        member_data = get_member_details_by_card(card_number)
 
-        if not member_data.get("mbrcardno"):
+        business_id = request.user.business_id
+
+        # Step 1: Resolve primary card from remote
+        resolved = get_primary_card_from_remote(card_number, business_id)
+        primary_card_number = resolved.get("primary_card_number")
+
+        if not resolved.get("success") or not primary_card_number:
+            # Step 1B: fallback to direct primary card check
+            fallback_member = BusinessMember.objects.filter(
+                BizMbrCardNo=card_number,
+                BizMbrBizId=business_id
+            ).first()
+
+            if not fallback_member:
+                return Response({"message": "Member not found."}, status=status.HTTP_200_OK)
+
+            primary_card_number = fallback_member.BizMbrCardNo
+        else:
+            # Confirm member exists from remote
+            member_data = get_member_details_by_card(primary_card_number)
+            if not member_data or not member_data.get("mbrcardno"):
+                return Response({"message": "Member not found."}, status=status.HTTP_200_OK)
+
+        # Step 2: Get full BusinessMember object
+        business_member = BusinessMember.objects.filter(
+            BizMbrCardNo=primary_card_number,
+            BizMbrBizId=business_id
+        ).first()
+
+        if not business_member:
             return Response({"message": "Member not found."}, status=status.HTTP_200_OK)
 
-        # Extract mobile number and other details from external service response
-        mobile_number = member_data.get("mobile_number")
-        full_name = member_data.get("full_name")
-        print(full_name,mobile_number)
-
-        # Continue logic using raw card_number
-        business_member = BusinessMember.objects.filter(
-            BizMbrCardNo=card_number,
-            BizMbrBizId=request.user.business_id
-        ).first()
-        
-
+        # Step 3: Milestone and Points
         milestone = (
             business_member.BizMbrRuleId.RewardRuleMilestone
             if business_member and business_member.BizMbrRuleId else None
         )
 
-        # Fetch cumulative points
         cumulative_points = CumulativePoints.objects.filter(
-            CmltvPntsMbrCardNo=card_number, CmltvPntsBizId=request.user.business_id
+            CmltvPntsMbrCardNo=primary_card_number,
+            CmltvPntsBizId=business_id
         ).first()
 
-        # Prepare response data
+        # Optional: try to fetch name, mobile from external if fallback used
+        member_data = get_member_details_by_card(primary_card_number) or {}
+
         response_data = {
-            "mbrcardno": card_number,
-            "full_name": full_name,
-            "mobile_number": mobile_number,
-            "business_id": request.user.business_id,
+            "mbrcardno": primary_card_number,
+            "full_name": member_data.get("full_name", ""),
+            "mobile_number": member_data.get("mobile_number", ""),
+            "business_id": business_id,
             "business_name": request.user.business_name,
             "RewardRuleMilestone": milestone,
             "cumulative_points": {
@@ -552,6 +551,7 @@ class MemberDetailByCardNumberApi(APIView):
 
 
 
+
 class CheckMemberActive(APIView):
     """
     API to check if a member is active based on the provided card number.
@@ -564,40 +564,102 @@ class CheckMemberActive(APIView):
         responses={200: CheckMemberActiveSerializer()}
     )
     def get(self, request):
-        """
-        Check if a member is active.
-        """
-        
         if not hasattr(request.user, "business_id"):
             return Response(
-                {"success": False, "error": "User is not a Business.", "BizMbrIsActive": False},
+                {"success": False, "error": "User is not a Business."},
                 status=status.HTTP_403_FORBIDDEN
             )
-        card_number = request.query_params.get("card_number")  # Get card number from request
 
+        card_number = request.query_params.get("card_number")
         if not card_number:
             return Response(
-                {"success": False, "error": "Card number is required.", "BizMbrIsActive": False},
+                {"success": False, "error": "Card number is required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        business_id = request.user.business_id  
-        
-        # Get the first active member if multiple exist
-        business_member = BusinessMember.objects.filter(BizMbrCardNo=card_number,
-            BizMbrBizId=business_id ).first()
+        business_id = request.user.business_id
 
-        if not business_member:  # Handle case where no member is found
+        # Step 1: Try resolving from Server A
+        resolved = get_primary_card_from_remote(card_number, business_id)
+        primary_card_number = resolved.get("primary_card_number")
+
+        if not resolved.get("success") or not primary_card_number:
+            # ⛔ Fall back: maybe this is a primary card directly
+            fallback_member = BusinessMember.objects.filter(
+                BizMbrCardNo=card_number,
+                BizMbrBizId=business_id
+            ).first()
+
+            if fallback_member:
+                if not fallback_member.BizMbrIsActive:
+                    return Response(
+                        {"success": False, "message": "Member is not active."},
+                        status=status.HTTP_200_OK
+                    )
+                serializer = CheckMemberActiveSerializer(fallback_member)
+                return Response(
+                    {"success": True, "message": "Active member found (primary fallback).", "data": serializer.data},
+                    status=status.HTTP_200_OK
+                )
+
             return Response(
-                {"success": False, "error": "No active member found for this card number.", "BizMbrIsActive": False},
+                {"success": False, "message": resolved.get("message", "This card is not associated with this business.")},
                 status=status.HTTP_200_OK
             )
 
+        # Step 2: Confirm with get_member_details_by_card
+        member_data = get_member_details_by_card(primary_card_number)
+        if not member_data:
+            return Response(
+                {"success": False, "message": "Card is not associated with your business."},
+                status=status.HTTP_200_OK
+            )
+
+        # Step 3: Find BusinessMember
+        business_member = BusinessMember.objects.filter(
+            BizMbrCardNo=primary_card_number,
+            BizMbrBizId=business_id
+        ).first()
+
+        if not business_member:
+            return Response(
+                {"success": False, "error": "No active member found for this card number."},
+                status=status.HTTP_200_OK
+            )
+
+        if not business_member.BizMbrIsActive:
+            return Response(
+                {"success": False, "message": "Member is not active.", "BizMbrIsActive": False},
+                status=status.HTTP_200_OK
+            )
+
+        # Final Step: Return success
         serializer = CheckMemberActiveSerializer(business_member)
         return Response(
-            {"success": True, "message": "Member found.", "data": serializer.data},
+            {"success": True, "message": "Active member found.", "data": serializer.data},
             status=status.HTTP_200_OK
         )
+
+
+
+class MemberDetailsByCardAPI(APIView):
+    authentication_classes = [SSOBusinessTokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        card_number = request.GET.get("card_number")
+        if not card_number:
+            return Response({"error": "Card number is required."}, status=status.HTTP_400_BAD_REQUEST)
+        business_id = request.user.business_id
+        member = BusinessMember.objects.filter(BizMbrCardNo=card_number,BizMbrBizId=business_id).first()
+        if not member:
+            return Response({"error": "Member not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "BizMbrCardNo": member.BizMbrCardNo,
+            "BizMbrBizId": member.BizMbrBizId,
+            "BizMbrIsActive": member.BizMbrIsActive,
+        }, status=status.HTTP_200_OK)
         
 
 

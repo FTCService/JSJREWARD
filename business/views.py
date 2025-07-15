@@ -454,7 +454,7 @@ class NewMemberEnrollAPI(APIView):
             }
 
             # Generate signup link
-            base_url = "https://reward.jsjcard.com"
+            base_url = "https://www.jsjcard.com"
             signup_url = f"{base_url}/member/sign-up/?referId={refer_id}&name={full_name}&phone={mobile_number}"
 
             send_sms({
@@ -640,27 +640,6 @@ class CheckMemberActive(APIView):
             status=status.HTTP_200_OK
         )
 
-
-
-class MemberDetailsByCardAPI(APIView):
-    authentication_classes = [SSOBusinessTokenAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        card_number = request.GET.get("card_number")
-        if not card_number:
-            return Response({"error": "Card number is required."}, status=status.HTTP_400_BAD_REQUEST)
-        business_id = request.user.business_id
-        member = BusinessMember.objects.filter(BizMbrCardNo=card_number,BizMbrBizId=business_id).first()
-        if not member:
-            return Response({"error": "Member not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        return Response({
-            "BizMbrCardNo": member.BizMbrCardNo,
-            "BizMbrBizId": member.BizMbrBizId,
-            "BizMbrIsActive": member.BizMbrIsActive,
-        }, status=status.HTTP_200_OK)
-        
 
 
         
@@ -851,6 +830,7 @@ class BusinessMemberListCreateApi(APIView):
 class BusinessMembercheckActiveAPI(APIView):
     # authentication_classes = [SSOBusinessTokenAuthentication]
     # permission_classes = [IsAuthenticated]
+    
     def get(self, request):
         card_number = request.GET.get("card_number")
         business_id = request.GET.get("business_id")

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Points Redemption</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f8;
+            padding: 20px;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 600px;
+            margin: auto;
+        }
+        .title {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .message {
+            font-size: 16px;
+            color: #555;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 13px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="title">🎉 Points Redeemed Successfully!</div>
+        <div class="message">
+            Hi {{ full_name }},<br><br>
+            You have successfully redeemed <strong>{{ points }}</strong> points using your card <strong>{{ card_number }}</strong>.<br><br>
+            <strong>Transaction ID:</strong> {{ transaction_id }}<br><br>
+            Thank you for being a valuable member of our business.
+        </div>
+        <div class="footer">
+            This is an automated email. Please do not reply.
+        </div>
+    </div>
+</body>
+</html>

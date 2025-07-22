@@ -6,7 +6,7 @@ import uuid
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.template.loader import render_to_string
-from helpers.emails import send_cupon_email  # Replace with actual module path
+
 
 class SurveySubmitAPI(APIView):
     @swagger_auto_schema(
@@ -73,7 +73,7 @@ class SurveySubmitAPI(APIView):
                     "name": name,
                     "coupon": coupon
                 })
-                send_cupon_email(email, "Your Survey Coupon Code", html_body)
+                # send_cupon_email(email, "Your Survey Coupon Code", html_body)
                 message = f"Check your email for coupons. Your code: {coupon}"
             else:
                 message = "Thank you for submitting the survey."

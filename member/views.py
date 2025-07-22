@@ -11,7 +11,7 @@ from .serializers import MemberBusinessSotreSerializer, CumulativePointsSerializ
 from helpers.utils import get_business_details_by_id, get_member_details_by_card
 from django.utils import timezone
 from django.db.models import Q
-
+from helpers.emails import send_template_email
 
 
 class BusinessStoreListApi(APIView):
@@ -450,12 +450,14 @@ class MemberQRScanAPIView(APIView):
 
         if not business_id:
             return Response({"success": False, "error": "Biz_Id is required."}, status=400)
-
+        
         try:
             business_id = int(business_id)
         except ValueError:
             return Response({"success": False, "error": "Invalid Biz_Id format."}, status=400)
-
+        business = get_business_details_by_id(business_id)
+        business_id=business.get("business_id")
+        email=business.get("email")
         # Check if already active
         if BusinessMember.objects.filter(BizMbrCardNo=card_number, BizMbrBizId=business_id).exists():
             return Response({
@@ -475,7 +477,7 @@ class MemberQRScanAPIView(APIView):
         member_data = get_member_details_by_card(card_number)
         if not member_data:
             return Response({"success": False, "error": "Member not found."}, status=404)
-
+        
         # Create join request
         MemberJoinRequest.objects.create(
             business=business_id,
@@ -484,6 +486,18 @@ class MemberQRScanAPIView(APIView):
             mobile_number=member_data.get("mobile_number"),
             is_approved=False
         )
+        
+        context = {
+            "full_name": member_data.get("full_name"),
+            "mbrcardno": card_number,
+            "Mobile_number": member_data.get("mobile_number"),
+        }
+        send_template_email(
+            subject="New Join Request Received",
+            template_name="email_template/send_request.html",
+            context=context,
+            recipient_list=[email] 
+            )
 
         return Response({
             "success": True,

@@ -1,38 +1,48 @@
+import threading
 import requests
-import urllib.parse
+from django.template.loader import render_to_string
+from django.conf import settings
 
-def send_cupon_email(email, subject, html_body):
+
+def send_template_email(subject, template_name, context, recipient_list, attachments=None):
     """
-    Send an email using the external BulkEmail API.
+    Send an email by invoking your AWS Lambda SES API.
+    Supports HTML content and optional attachments.
     """
+    # Render the HTML content
+    html_message = render_to_string(template_name, context)
+
+    sender = "contact@jsjcard.com"  # Your verified SES sender email
+    recipient = recipient_list[0] if recipient_list else None
+
+    if not recipient:
+        print("No recipient provided.")
+        return
+
     api_url = "https://w1yg18jn76.execute-api.ap-south-1.amazonaws.com/default/sesapi"
 
-    # # Ensure the recipient email is clean
-    # if email.endswith(".com.com"):
-    #     email = email.replace(".com.com", ".com")
+    # Prepare payload
+    payload = {
+        "sender": sender,
+        "recipient": recipient,
+        "subject": subject,
+        "body": html_message
+    }
 
-    # URL encode subject and body
-    encoded_subject = urllib.parse.quote(subject)
-    encoded_body = urllib.parse.quote(html_body)
+    # If attachments are provided, encode them as JSON string
+    if attachments:
+        payload["attachments"] = attachments  # Must be a list of dicts as per your Lambda spec
 
-    try: 
-        # Construct the full URL with query parameters
-        full_url = f"{api_url}?sender=avinash.singh.270504@gmail.com&recipient={email}&subject={encoded_subject}&body={encoded_body}"
+    headers = {"Content-Type": "application/json"}
 
-        response = requests.get(full_url)
+    def send_email():
+        try:
+            response = requests.post(api_url, json=payload, headers=headers)
+            if response.status_code == 200:
+                print("✅ Email sent successfully via AWS SES API.")
+            else:
+                print(f"❌ Failed to send email. Status: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            print(f"❌ Exception while sending email: {e}")
 
-        # Debug print
-        print("Requested URL:", full_url)
-
-        # Check response status
-        if response.status_code == 200:
-            print(f"✅ Email sent to: {email}")
-            return True
-        else:
-            print(f"❌ Failed to send to {email}. Status: {response.status_code}")
-            print(f"Response Content: {response.content.decode()}")
-            return False
-
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error sending to {email}: {e}")
-        return False
+    threading.Thread(target=send_email).start()

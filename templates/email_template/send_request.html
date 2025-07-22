@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>New Join Request</title>
+  <style>
+    .container {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      border-radius: 10px;
+      background-color: #f4f4f4;
+      color: #333;
+      max-width: 600px;
+      margin: auto;
+    }
+    .card {
+      background-color: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      margin-top: 20px;
+      background-color: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+    }
+    .btn:hover {
+      background-color: #0056b3;
+    }
+    .info {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h2>New Join Request</h2>
+      <p><strong>Name:</strong> {{ full_name }}</p>
+      <p><strong>Card Number:</strong> {{ mbrcardno }}</p>
+      <p><strong>Mobile:</strong> {{ Mobile_number }}</p>
+
+      <div class="info">
+        <p>To accept this member, please click below:</p>
+        <a href="https://www.jsjcard.com/business/member-requests" class="btn">Review & Accept</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

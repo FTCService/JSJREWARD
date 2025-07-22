@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>New Member Enrolled</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f8;
+            margin: 0;
+            padding: 0;
+        }
+        .email-container {
+            background-color: #ffffff;
+            width: 100%;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
+        }
+        h2 {
+            color: #2c3e50;
+        }
+        p {
+            font-size: 16px;
+            color: #444444;
+            line-height: 1.6;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #888888;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <h2>Hello {{ full_name }},</h2>
+        <p>We're excited to inform you that you've been successfully enrolled as a member under the business <strong>{{ business_name }}</strong>.</p>
+        
+        <p><strong>Card Number:</strong> {{ card_number }}</p>
+
+        <div class="footer">
+            <p>&copy; 2025 JSJ Card. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

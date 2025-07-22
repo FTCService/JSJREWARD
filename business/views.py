@@ -32,6 +32,8 @@ from rest_framework.exceptions import ValidationError
 from .authentication import SSOBusinessTokenAuthentication
 import csv, io
 from django.utils import timezone
+from helpers.emails import send_template_email
+
 
 class BulkBusinessRewardRuleUpload(APIView):
     def post(self, request, *args, **kwargs):
@@ -763,7 +765,7 @@ class BusinessMemberListCreateApi(APIView):
 
         try:
             business_instance = request.user.business_id
-            
+            business_name = request.user.business_name
             # ✅ Fetch Reward Rule associated with the authenticated business user
             reward_rule = BusinessRewardRule.objects.get(
                 pk=reward_rule_id, 
@@ -780,6 +782,8 @@ class BusinessMemberListCreateApi(APIView):
             member_data = get_member_details_by_card(card_number)
             
             member = member_data.get("mbrcardno")
+            email = member_data.get("email")
+            full_name = member_data.get("full_name")
 
             # ✅ Check if an active membership already exists for this business and card
             existing_membership = BusinessMember.objects.filter(
@@ -806,6 +810,21 @@ class BusinessMemberListCreateApi(APIView):
             if serializer.is_valid():
                 # Save the BusinessMember
                 serializer.save()
+                
+                 # ✅ Add business_name to email context
+                context = {
+                    "business_name": business_name,
+                    "member_name": full_name,
+                    "card_number": member,
+                    "validity_end": validity_end_date.strftime('%Y-%m-%d'),
+                }
+
+                send_template_email(
+                    subject="Membership Enrolled Successfully",
+                    template_name="email_template/enroll_member.html",
+                    context=context,
+                    recipient_list=[email]
+                )
                 return Response({
                     "success": True,
                     "BizMbrIsActive":True,
@@ -1280,7 +1299,7 @@ class MemberRequestListApi(APIView):
     )
     def get(self, request):
         business_id = request.user.business_id
-        pending_requests = MemberJoinRequest.objects.filter(business=business_id)
+        pending_requests = MemberJoinRequest.objects.filter(business=business_id , is_approved=False)
         serializer = MemberJoinRequestSerializer(pending_requests, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
@@ -1314,15 +1333,6 @@ class ApproveJoinRequestView(APIView):
             join_request.is_approved = True
             join_request.responded_at = timezone.now()
             join_request.save()
-
-            # Add member to BusinessMember model
-            # BusinessMember.objects.create(
-            #     BizMbrBizId=join_request.business,
-            #     BizMbrCardNo=join_request.card_number,
-            #     BizMbrIsActive=True,
-            #     BizMbrIssueDate=timezone.now(),
-            #     BizMbrValidityEnd=timezone.now() + timedelta(days=365)
-            # )
 
             return Response({"success": True, "message": "Member approved ", "card_number":join_request.card_number,"BizMbrIsActive": False,}, status=200)
 

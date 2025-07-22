@@ -486,58 +486,41 @@ class MemberDetailByCardNumberApi(APIView):
     def get(self, request, card_number):
         if not card_number:
             return Response({"error": "Card number is required."}, status=status.HTTP_400_BAD_REQUEST)
+        # card_number= 8835846533625056
+        # Fetch member data from external AUTH service
+        member_data = get_member_details_by_card(card_number)
 
-        business_id = request.user.business_id
-
-        # Step 1: Resolve primary card from remote
-        resolved = get_primary_card_from_remote(card_number, business_id)
-        primary_card_number = resolved.get("primary_card_number")
-
-        if not resolved.get("success") or not primary_card_number:
-            # Step 1B: fallback to direct primary card check
-            fallback_member = BusinessMember.objects.filter(
-                BizMbrCardNo=card_number,
-                BizMbrBizId=business_id
-            ).first()
-
-            if not fallback_member:
-                return Response({"message": "Member not found."}, status=status.HTTP_200_OK)
-
-            primary_card_number = fallback_member.BizMbrCardNo
-        else:
-            # Confirm member exists from remote
-            member_data = get_member_details_by_card(primary_card_number)
-            if not member_data or not member_data.get("mbrcardno"):
-                return Response({"message": "Member not found."}, status=status.HTTP_200_OK)
-
-        # Step 2: Get full BusinessMember object
-        business_member = BusinessMember.objects.filter(
-            BizMbrCardNo=primary_card_number,
-            BizMbrBizId=business_id
-        ).first()
-
-        if not business_member:
+        if not member_data.get("mbrcardno"):
             return Response({"message": "Member not found."}, status=status.HTTP_200_OK)
 
-        # Step 3: Milestone and Points
+        # Extract mobile number and other details from external service response
+        mobile_number = member_data.get("mobile_number")
+        full_name = member_data.get("full_name")
+        print(full_name,mobile_number)
+
+        # Continue logic using raw card_number
+        business_member = BusinessMember.objects.filter(
+            BizMbrCardNo=card_number,
+            BizMbrBizId=request.user.business_id
+        ).first()
+        
+
         milestone = (
             business_member.BizMbrRuleId.RewardRuleMilestone
             if business_member and business_member.BizMbrRuleId else None
         )
 
+        # Fetch cumulative points
         cumulative_points = CumulativePoints.objects.filter(
-            CmltvPntsMbrCardNo=primary_card_number,
-            CmltvPntsBizId=business_id
+            CmltvPntsMbrCardNo=card_number, CmltvPntsBizId=request.user.business_id
         ).first()
 
-        # Optional: try to fetch name, mobile from external if fallback used
-        member_data = get_member_details_by_card(primary_card_number) or {}
-
+        # Prepare response data
         response_data = {
-            "mbrcardno": primary_card_number,
-            "full_name": member_data.get("full_name", ""),
-            "mobile_number": member_data.get("mobile_number", ""),
-            "business_id": business_id,
+            "mbrcardno": card_number,
+            "full_name": full_name,
+            "mobile_number": mobile_number,
+            "business_id": request.user.business_id,
             "business_name": request.user.business_name,
             "RewardRuleMilestone": milestone,
             "cumulative_points": {
@@ -978,7 +961,9 @@ class CardTransactionApi(APIView):
 
                 # Save the transaction
                 transaction.save()
-
+                member_data = get_member_details_by_card(transaction.CrdTrnsCardNumber)
+                full_name = member_data.get("full_name")
+                email = member_data.get("email")
                 # 💡 Update Cumulative Points
                 cumulative_points, created = CumulativePoints.objects.get_or_create(
                     CmltvPntsMbrCardNo=transaction.CrdTrnsCardNumber,
@@ -1010,7 +995,22 @@ class CardTransactionApi(APIView):
                         }, status=status.HTTP_400_BAD_REQUEST)
 
                 cumulative_points.save()
-
+                # Prepare context for email
+                email_context = {
+                    "full_name": full_name,
+                    "transaction_type": transaction.CrdTrnsTransactionType.replace("_", " "),
+                    "points": transaction.CrdTrnsPoint,
+                    "purchase_amount": transaction.CrdTrnsPurchaseAmount,
+                    "card_number": transaction.CrdTrnsCardNumber,
+                    "business_name": request.user.business_name,
+                }
+                # Send email notification
+                send_template_email(
+                    subject="Your JSJ Card Transaction Summary",
+                    template_name="email_template/transaction_notification.html",
+                    context=email_context,
+                    recipient_list=[email]
+                )
                 return Response({
                     "success": True,
                     "message": "Transaction recorded successfully.",
@@ -1176,7 +1176,9 @@ class RedeemPointsAPIView(APIView):
 
         card_number = serializer.validated_data["card_number"]
         business_id = serializer.validated_data["business_id"]
-
+        member_data = get_member_details_by_card(card_number)
+        full_name = member_data.get("full_name")
+        email = member_data.get("email")
         # 🔍 Fetch cumulative points
         try:
             cumulative_points = CumulativePoints.objects.get(
@@ -1224,7 +1226,21 @@ class RedeemPointsAPIView(APIView):
         cumulative_points.LifetimeRedeemedPoints += milestone
         cumulative_points.CurrentBalance -= milestone
         cumulative_points.save()
+        # Prepare email context
+        email_context = {
+            "full_name": full_name,
+            "card_number": card_number,
+            "points": milestone,
+            "transaction_id": transaction.id
+        }
 
+        # Send email
+        send_template_email(
+            subject="Points Redemption Notification",
+            template_name="email_template/redeem_notification.html",
+            context=email_context,
+            recipient_list=[email]
+        )
         return Response(
             {
                 "success": True,

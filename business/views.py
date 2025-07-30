@@ -564,36 +564,9 @@ class CheckMemberActive(APIView):
 
         business_id = request.user.business_id
 
-        # Step 1: Try resolving from Server A
-        resolved = get_primary_card_from_remote(card_number, business_id)
-        primary_card_number = resolved.get("primary_card_number")
-
-        if not resolved.get("success") or not primary_card_number:
-            # ⛔ Fall back: maybe this is a primary card directly
-            fallback_member = BusinessMember.objects.filter(
-                BizMbrCardNo=card_number,
-                BizMbrBizId=business_id
-            ).first()
-
-            if fallback_member:
-                if not fallback_member.BizMbrIsActive:
-                    return Response(
-                        {"success": False, "message": "Member is not active."},
-                        status=status.HTTP_200_OK
-                    )
-                serializer = CheckMemberActiveSerializer(fallback_member)
-                return Response(
-                    {"success": True, "message": "Active member found (primary fallback).", "data": serializer.data},
-                    status=status.HTTP_200_OK
-                )
-
-            return Response(
-                {"success": False, "message": resolved.get("message", "This card is not associated with this business.")},
-                status=status.HTTP_200_OK
-            )
 
         # Step 2: Confirm with get_member_details_by_card
-        member_data = get_member_details_by_card(primary_card_number)
+        member_data = get_member_details_by_card(card_number)
         if not member_data:
             return Response(
                 {"success": False, "message": "Card is not associated with your business."},
@@ -602,7 +575,7 @@ class CheckMemberActive(APIView):
 
         # Step 3: Find BusinessMember
         business_member = BusinessMember.objects.filter(
-            BizMbrCardNo=primary_card_number,
+            BizMbrCardNo=card_number,
             BizMbrBizId=business_id
         ).first()
 
@@ -624,6 +597,7 @@ class CheckMemberActive(APIView):
             {"success": True, "message": "Active member found.", "data": serializer.data},
             status=status.HTTP_200_OK
         )
+
 
 
 

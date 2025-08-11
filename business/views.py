@@ -149,7 +149,7 @@ class BusinessRewardRuleListCreateApi(APIView):
             )
 
         # ✅ Filter using business_id instead of the default primary key
-        reward_rules = BusinessRewardRule.objects.filter(RewardRuleBizId=request.user.business_id)
+        reward_rules = BusinessRewardRule.objects.filter(RewardRuleBizId=request.user.business_id).order_by("id") 
         serializer = BusinessRewardRuleSerializer(reward_rules, many=True)
         return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
 

@@ -456,7 +456,7 @@ class NewMemberEnrollAPI(APIView):
             }
 
             # Generate signup link
-            base_url = "https://www.jsjcard.com"
+            base_url = settings.SITE_BASE_URL
             signup_url = f"{base_url}/member/sign-up/?referId={refer_id}&name={full_name}&phone={mobile_number}"
 
             send_sms({

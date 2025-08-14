@@ -19,7 +19,6 @@ def get_primary_card_from_remote(card_number, business_id):
                     "message": data.get("message", "")
                 }
 
-            # If physical card exists but not mapped
             if data.get("primary_card_number") == card_number and not data.get("is_associated", True):
                 return {
                     "success": False,
@@ -27,12 +26,18 @@ def get_primary_card_from_remote(card_number, business_id):
                     "message": data.get("message", "Card is not mapped.")
                 }
 
-            # Physical card doesn't exist
             return {
                 "success": False,
                 "primary_card_number": None,
                 "message": data.get("message", "Card is not associated with this business.")
             }
+
+        # ❌ Non-200 response
+        return {
+            "success": False,
+            "primary_card_number": None,
+            "message": f"Auth server returned status {response.status_code}"
+        }
 
     except requests.RequestException:
         return {

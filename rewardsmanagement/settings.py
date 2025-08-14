@@ -156,3 +156,5 @@ AUTH_SERVER_URL =env_vars['AUTH_SERVER_URL']
 
 # cros origin 
 CORS_ALLOW_ALL_ORIGINS = True
+
+SITE_BASE_URL = env_vars["SITE_BASE_URL"]

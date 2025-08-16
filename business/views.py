@@ -492,6 +492,7 @@ class MemberDetailByCardNumberApi(APIView):
         # ✅ Step 1: Resolve primary card number from external AUTH service
         resolved = get_primary_card_from_remote(card_number, business_id)
         primary_card_number = resolved.get("primary_card_number")
+        secondary_card_number = resolved.get("secondary_card_number")  
 
         if not resolved.get("success") or not primary_card_number:
             return Response(
@@ -527,6 +528,7 @@ class MemberDetailByCardNumberApi(APIView):
 
         # ✅ Step 6: Prepare response
         response_data = {
+            "secondary_card_number": secondary_card_number,  # return secondary card number if available    
             "mbrcardno": primary_card_number,  # always return primary card number
             "full_name": full_name,
             "mobile_number": mobile_number,

@@ -16,6 +16,7 @@ def get_primary_card_from_remote(card_number, business_id):
                 return {
                     "success": True,
                     "primary_card_number": data["primary_card_number"],
+                    "secondary_card_number": data.get("secondary_card_number"),
                     "message": data.get("message", "")
                 }
 

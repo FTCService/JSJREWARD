@@ -697,6 +697,7 @@ class CheckMemberActive(APIView):
                 return Response(
                     {
                         "success": False,
+                        "physical_card":False,
                         "message": "This card belongs to another business.",
                         "other_business_id": other_business_member.BizMbrBizId
                     },

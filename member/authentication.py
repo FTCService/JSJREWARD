@@ -14,7 +14,7 @@ class SSOMemberTokenAuthentication(BaseAuthentication):
 
         try:
             response = requests.post(
-                settings.AUTH_SERVER_URL + "/member/verify-token/",
+                settings.AUTH_SERVER_URL + "/api/member/verify-token/",
                 json={"token": token},
                 timeout=5
             )

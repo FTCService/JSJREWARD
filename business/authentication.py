@@ -14,7 +14,7 @@ class SSOBusinessTokenAuthentication(BaseAuthentication):
 
         try:
             response = requests.post(
-                settings.AUTH_SERVER_URL + "/verify-token/",
+                settings.AUTH_SERVER_URL + "/api/verify-token/",
                 json={"token": token},
                 timeout=5
             )

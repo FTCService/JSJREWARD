@@ -5,7 +5,7 @@ from django.conf import settings
 def get_primary_card_from_remote(card_number, business_id):
     try:
         response = requests.get(
-            settings.AUTH_SERVER_URL + "/get-primary-card/",
+            settings.AUTH_SERVER_URL + "/api/get-primary-card/",
             params={"card_number": card_number, "business_id": business_id},
             timeout=5
         )

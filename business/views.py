@@ -1308,6 +1308,8 @@ class RedeemPointsAPIView(APIView):
 
         card_number = serializer.validated_data["card_number"]
         business_id = serializer.validated_data["business_id"]
+        custom_points = serializer.validated_data.get("custom_points")
+        
         member_data = get_member_details_by_card(card_number)
         full_name = member_data.get("full_name")
         email = member_data.get("email")
@@ -1337,13 +1339,26 @@ class RedeemPointsAPIView(APIView):
             )
 
         reward_rule = business_member.BizMbrRuleId
-        milestone = reward_rule.RewardRuleMilestone
-
-        if cumulative_points.CurrentBalance < milestone:
-            return Response(
-                {"success": False, "message": "Insufficient points for redemption."},
-                status=status.HTTP_200_OK
-            )
+        # ✅ Decide redemption amount
+        if custom_points is not None:
+            if custom_points <= 0:
+                return Response(
+                    {"success": False, "message": "Custom points must be greater than 0."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if custom_points > cumulative_points.CurrentBalance:
+                return Response(
+                    {"success": False, "message": "Insufficient points for custom redemption."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            milestone = custom_points
+        else:
+            milestone = reward_rule.RewardRuleMilestone
+            if cumulative_points.CurrentBalance < milestone:
+                return Response(
+                    {"success": False, "message": f"Minimum {milestone} points required for milestone redemption."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         # 💾 Create transaction
         transaction = CardTransaction.objects.create(
@@ -1356,6 +1371,7 @@ class RedeemPointsAPIView(APIView):
 
         # 🔄 Update points
         cumulative_points.LifetimeRedeemedPoints += milestone
+        
         cumulative_points.CurrentBalance -= milestone
         cumulative_points.save()
         # Prepare email context

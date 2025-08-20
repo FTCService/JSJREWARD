@@ -172,6 +172,11 @@ class CardTransactionSerializer(serializers.ModelSerializer):
 class RedeemPointsSerializer(serializers.Serializer):
     card_number = serializers.CharField(write_only=True)
     business_id = serializers.IntegerField(write_only=True)
+    custom_points = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Custom points to redeem (must be <= current balance)"
+    )
 
     def validate(self, data):
         """Check if the user has enough points to redeem a fixed milestone value."""

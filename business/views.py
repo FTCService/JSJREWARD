@@ -33,44 +33,7 @@ from .authentication import SSOBusinessTokenAuthentication
 import csv, io
 from django.utils import timezone
 from helpers.emails import send_template_email
-
-
-class BulkBusinessRewardRuleUpload(APIView):
-    def post(self, request, *args, **kwargs):
-        file = request.FILES.get("file")
-        if not file:
-            return Response({"error": "CSV file is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        data_set = file.read().decode("UTF-8")
-        io_string = io.StringIO(data_set)
-        csv_reader = csv.DictReader(io_string)
-
-        created_rules = []
-
-        for row in csv_reader:
-            try:
-                reward_rule = BusinessRewardRule.objects.create(
-                    id=row.get("id"),
-                    RewardRuleBizId=int(row.get("RewardRuleBizId")),
-                    RewardRuleType=row.get("RewardRuleType"),
-                    RewardRuleNotionalValue=row.get("RewardRuleNotionalValue"),
-                    RewardRuleValue=row.get("RewardRuleValue") or None,
-                    RewardRuleValidityPeriodYears=row.get("RewardRuleValidityPeriodYears") or None,
-                    RewardRuleMilestone=row.get("RewardRuleMilestone") or None,
-                    RewardRuleIsDefault=row.get("RewardRuleIsDefault", "False").lower() in ["true", "1"]
-                )
-                created_rules.append(reward_rule.id)
-
-            except Exception as e:
-                return Response({
-                    "error": f"Failed to process row: {row}",
-                    "details": str(e)
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response({
-            "message": f"{len(created_rules)} reward rules uploaded successfully.",
-            "reward_rule_ids": created_rules
-        }, status=status.HTTP_201_CREATED)
+from helpers.pagination import paginate
 
 
 class BulkBusinessMemberUpload(APIView):
@@ -1045,9 +1008,24 @@ class CardTransactionApi(APIView):
 
     @swagger_auto_schema(responses={200: CardTransactionSerializer(many=True)})
     def get(self, request):
-        transactions = CardTransaction.objects.filter(CrdTrnsBizId=request.user.business_id)
-        serializer = CardTransactionSerializer(transactions, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        transactions = CardTransaction.objects.filter(
+            CrdTrnsBizId=request.user.business_id
+        ).order_by("-id")
+
+        # Use custom paginate function
+        page, pagination_meta = paginate(
+            request,
+            transactions,
+            data_per_page=int(request.GET.get("page_size", 10))
+        )
+
+        serialized_data = CardTransactionSerializer(page, many=True).data
+
+        return Response({
+            "status": 200,
+            "data": serialized_data,
+            "pagination_meta_data": pagination_meta
+        }, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(request_body=CardTransactionSerializer)
     def post(self, request):

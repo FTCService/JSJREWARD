@@ -1453,30 +1453,87 @@ class ApproveJoinRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="Approve a specific join request by request_id.",
+        operation_description="Approve or reject a specific join request by request_id.",
         manual_parameters=[
             openapi.Parameter(
                 'request_id',
                 openapi.IN_PATH,
                 description="ID of the join request",
-                type=openapi.TYPE_INTEGER
+                type=openapi.TYPE_INTEGER,
+                required=True,
             )
         ],
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'is_approved': openapi.Schema(
+                    type=openapi.TYPE_BOOLEAN,
+                    description="True to approve, False to reject"
+                )
+            },
+            required=['is_approved']
+        ),
         responses={
-            200: openapi.Response(description="Member approved and added."),
-            404: openapi.Response(description="Join request not found.")
-        }
+            200: openapi.Response(
+                description="Join request processed successfully",
+                examples={
+                    "application/json": {
+                        "success": True,
+                        "message": "Member approved",
+                        "card_number": "5415219928973405",
+                        "is_approved": True
+                    }
+                }
+            ),
+            400: openapi.Response(
+                description="Missing or invalid is_approved",
+                examples={
+                    "application/json": {
+                        "success": False,
+                        "error": "is_approved field is required (True/False)."
+                    }
+                }
+            ),
+            404: openapi.Response(
+                description="Join request not found",
+                examples={
+                    "application/json": {
+                        "success": False,
+                        "error": "Join request not found."
+                    }
+                }
+            )
+        },
+        tags=["Join Requests"]
     )
     def post(self, request, request_id):
         try:
             join_request = MemberJoinRequest.objects.get(id=request_id)
 
-            # Approve and save the join request
-            join_request.is_approved = True
+            # Read boolean from request body
+            is_approved = request.data.get("is_approved", None)
+            if is_approved is None or not isinstance(is_approved, bool):
+                return Response(
+                    {"success": False, "error": "is_approved field is required (True/False)."},
+                    status=400
+                )
+
+            # Approve or reject the join request
+            join_request.is_approved = is_approved
             join_request.responded_at = timezone.now()
             join_request.save()
 
-            return Response({"success": True, "message": "Member approved ", "card_number":join_request.card_number,"BizMbrIsActive": False,}, status=200)
+            message = "Member approved" if is_approved else "Member rejected"
+
+            return Response({
+                "success": True,
+                "message": message,
+                "card_number": join_request.card_number,
+                "is_approved": is_approved
+            }, status=200)
 
         except MemberJoinRequest.DoesNotExist:
-            return Response({"success": False, "error": "Join request not found."}, status=404)
+            return Response({
+                "success": False,
+                "error": "Join request not found."
+            }, status=404)

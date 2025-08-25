@@ -1453,7 +1453,7 @@ class ApproveJoinRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="Approve or reject a specific join request by request_id.",
+        operation_description="Approve or reject a specific join request by request_id. False will delete the request.",
         manual_parameters=[
             openapi.Parameter(
                 'request_id',
@@ -1468,7 +1468,7 @@ class ApproveJoinRequestView(APIView):
             properties={
                 'is_approved': openapi.Schema(
                     type=openapi.TYPE_BOOLEAN,
-                    description="True to approve, False to reject"
+                    description="True to approve, False to reject/delete"
                 )
             },
             required=['is_approved']
@@ -1518,17 +1518,21 @@ class ApproveJoinRequestView(APIView):
                     status=400
                 )
 
-            # Approve or reject the join request
-            join_request.is_approved = is_approved
-            join_request.responded_at = timezone.now()
-            join_request.save()
-
-            message = "Member approved" if is_approved else "Member rejected"
+            if is_approved:
+                # Approve the join request
+                join_request.is_approved = True
+                join_request.responded_at = timezone.now()
+                join_request.save()
+                message = "Member approved"
+            else:
+                # Reject: delete the join request
+                join_request.delete()
+                message = "Join request rejected and deleted"
 
             return Response({
                 "success": True,
                 "message": message,
-                "card_number": join_request.card_number,
+                "card_number": join_request.card_number if is_approved else None,
                 "is_approved": is_approved
             }, status=200)
 
@@ -1537,3 +1541,4 @@ class ApproveJoinRequestView(APIView):
                 "success": False,
                 "error": "Join request not found."
             }, status=404)
+

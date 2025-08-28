@@ -33,44 +33,7 @@ from .authentication import SSOBusinessTokenAuthentication
 import csv, io
 from django.utils import timezone
 from helpers.emails import send_template_email
-
-
-class BulkBusinessRewardRuleUpload(APIView):
-    def post(self, request, *args, **kwargs):
-        file = request.FILES.get("file")
-        if not file:
-            return Response({"error": "CSV file is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        data_set = file.read().decode("UTF-8")
-        io_string = io.StringIO(data_set)
-        csv_reader = csv.DictReader(io_string)
-
-        created_rules = []
-
-        for row in csv_reader:
-            try:
-                reward_rule = BusinessRewardRule.objects.create(
-                    id=row.get("id"),
-                    RewardRuleBizId=int(row.get("RewardRuleBizId")),
-                    RewardRuleType=row.get("RewardRuleType"),
-                    RewardRuleNotionalValue=row.get("RewardRuleNotionalValue"),
-                    RewardRuleValue=row.get("RewardRuleValue") or None,
-                    RewardRuleValidityPeriodYears=row.get("RewardRuleValidityPeriodYears") or None,
-                    RewardRuleMilestone=row.get("RewardRuleMilestone") or None,
-                    RewardRuleIsDefault=row.get("RewardRuleIsDefault", "False").lower() in ["true", "1"]
-                )
-                created_rules.append(reward_rule.id)
-
-            except Exception as e:
-                return Response({
-                    "error": f"Failed to process row: {row}",
-                    "details": str(e)
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response({
-            "message": f"{len(created_rules)} reward rules uploaded successfully.",
-            "reward_rule_ids": created_rules
-        }, status=status.HTTP_201_CREATED)
+from helpers.pagination import paginate
 
 
 class BulkBusinessMemberUpload(APIView):
@@ -149,7 +112,7 @@ class BusinessRewardRuleListCreateApi(APIView):
             )
 
         # ✅ Filter using business_id instead of the default primary key
-        reward_rules = BusinessRewardRule.objects.filter(RewardRuleBizId=request.user.business_id)
+        reward_rules = BusinessRewardRule.objects.filter(RewardRuleBizId=request.user.business_id).order_by("id") 
         serializer = BusinessRewardRuleSerializer(reward_rules, many=True)
         return Response({"success": True, "data": serializer.data}, status=status.HTTP_200_OK)
 
@@ -456,7 +419,7 @@ class NewMemberEnrollAPI(APIView):
             }
 
             # Generate signup link
-            base_url = "https://www.jsjcard.com"
+            base_url = settings.SITE_BASE_URL
             signup_url = f"{base_url}/member/sign-up/?referId={refer_id}&name={full_name}&phone={mobile_number}"
 
             send_sms({
@@ -480,47 +443,59 @@ class MemberDetailByCardNumberApi(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="Retrieve Business KYC details along with cumulative points",
+        operation_description="Retrieve Business KYC details along with cumulative points (resolves to primary card if secondary provided)",
         responses={200: MemberByCardSerializer()}
     )
     def get(self, request, card_number):
         if not card_number:
             return Response({"error": "Card number is required."}, status=status.HTTP_400_BAD_REQUEST)
-        # card_number= 8835846533625056
-        # Fetch member data from external AUTH service
-        member_data = get_member_details_by_card(card_number)
 
-        if not member_data.get("mbrcardno"):
+        business_id = request.user.business_id
+
+        # ✅ Step 1: Resolve primary card number from external AUTH service
+        resolved = get_primary_card_from_remote(card_number, business_id)
+        primary_card_number = resolved.get("primary_card_number")
+        secondary_card_number = resolved.get("secondary_card_number")  
+
+        if not resolved.get("success") or not primary_card_number:
+            return Response(
+                {"success": False, "message": resolved.get("message", "Card is not associated with this business.")},
+                status=status.HTTP_200_OK
+            )
+
+        # ✅ Step 2: Fetch member data from external AUTH service using primary card
+        member_data = get_member_details_by_card(primary_card_number)
+        if not member_data or not member_data.get("mbrcardno"):
             return Response({"message": "Member not found."}, status=status.HTTP_200_OK)
 
-        # Extract mobile number and other details from external service response
+        # ✅ Step 3: Extract details
         mobile_number = member_data.get("mobile_number")
         full_name = member_data.get("full_name")
-        print(full_name,mobile_number)
 
-        # Continue logic using raw card_number
+        # ✅ Step 4: Fetch local business member
         business_member = BusinessMember.objects.filter(
-            BizMbrCardNo=card_number,
-            BizMbrBizId=request.user.business_id
+            BizMbrCardNo=primary_card_number,
+            BizMbrBizId=business_id
         ).first()
-        
 
         milestone = (
             business_member.BizMbrRuleId.RewardRuleMilestone
             if business_member and business_member.BizMbrRuleId else None
         )
 
-        # Fetch cumulative points
+        # ✅ Step 5: Fetch cumulative points
         cumulative_points = CumulativePoints.objects.filter(
-            CmltvPntsMbrCardNo=card_number, CmltvPntsBizId=request.user.business_id
+            CmltvPntsMbrCardNo=primary_card_number,
+            CmltvPntsBizId=business_id
         ).first()
 
-        # Prepare response data
+        # ✅ Step 6: Prepare response
         response_data = {
-            "mbrcardno": card_number,
+            "secondary_card_number": secondary_card_number,  # return secondary card number if available    
+            "mbrcardno": primary_card_number,  # always return primary card number
             "full_name": full_name,
             "mobile_number": mobile_number,
-            "business_id": request.user.business_id,
+            "business_id": business_id,
             "business_name": request.user.business_name,
             "RewardRuleMilestone": milestone,
             "cumulative_points": {
@@ -536,10 +511,99 @@ class MemberDetailByCardNumberApi(APIView):
 
 
 
+# class CheckMemberActive(APIView):
+#     """
+#     API to check if a member is active based on the provided card number.
+#     """
+#     authentication_classes = [SSOBusinessTokenAuthentication]
+#     permission_classes = [IsAuthenticated]
+
+#     @swagger_auto_schema(
+#         operation_description="Check if a member is active based on the provided card number.",
+#         responses={200: CheckMemberActiveSerializer()}
+#     )
+#     def get(self, request):
+#         if not hasattr(request.user, "business_id"):
+#             return Response(
+#                 {"success": False, "error": "User is not a Business."},
+#                 status=status.HTTP_403_FORBIDDEN
+#             )
+
+#         card_number = request.query_params.get("card_number")
+#         if not card_number:
+#             return Response(
+#                 {"success": False, "error": "Card number is required."},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         business_id = request.user.business_id
+
+#         # Step 1: Try resolving from Server A
+#         resolved = get_primary_card_from_remote(card_number, business_id)
+#         primary_card_number = resolved.get("primary_card_number")
+
+#         if not resolved.get("success") or not primary_card_number:
+#             # ⛔ Fall back: maybe this is a primary card directly
+#             fallback_member = BusinessMember.objects.filter(
+#                 BizMbrCardNo=primary_card_number,
+#                 BizMbrBizId=business_id
+#             ).first()
+
+#             if fallback_member:
+#                 if not fallback_member.BizMbrIsActive:
+#                     return Response(
+#                         {"success": False, "message": "Member is not active."},
+#                         status=status.HTTP_200_OK
+#                     )
+#                 serializer = CheckMemberActiveSerializer(fallback_member)
+#                 return Response(
+#                     {"success": True, "message": "Active member found (primary fallback).", "data": serializer.data},
+#                     status=status.HTTP_200_OK
+#                 )
+
+#             return Response(
+#                 {"success": False, "message": resolved.get("message", "This card is not associated with this business.")},
+#                 status=status.HTTP_200_OK
+#             )
+
+#         # Step 2: Confirm with get_member_details_by_card
+#         member_data = get_member_details_by_card(primary_card_number)
+#         if not member_data:
+#             return Response(
+#                 {"success": False, "message": "Card is not associated with your business."},
+#                 status=status.HTTP_200_OK
+#             )
+
+#         # Step 3: Find BusinessMember
+#         business_member = BusinessMember.objects.filter(
+#             BizMbrCardNo=primary_card_number,
+#             BizMbrBizId=business_id
+#         ).first()
+
+#         if not business_member:
+#             return Response(
+#                 {"success": False, "error": "No active member found for this card number."},
+#                 status=status.HTTP_200_OK
+#             )
+
+#         if not business_member.BizMbrIsActive:
+#             return Response(
+#                 {"success": False, "message": "Member is not active.", "BizMbrIsActive": False},
+#                 status=status.HTTP_200_OK
+#             )
+
+#         # Final Step: Return success
+#         serializer = CheckMemberActiveSerializer(business_member)
+#         return Response(
+#             {"success": True, "message": "Active member found.", "data": serializer.data},
+#             status=status.HTTP_200_OK
+#         )
+
 
 class CheckMemberActive(APIView):
     """
     API to check if a member is active based on the provided card number.
+    Handles secondary cards, primary cards, and cards from other businesses.
     """
     authentication_classes = [SSOBusinessTokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -564,40 +628,97 @@ class CheckMemberActive(APIView):
 
         business_id = request.user.business_id
 
+        # Step 1: Resolve primary card (external Auth Server)
+        resolved = get_primary_card_from_remote(card_number, business_id)
+        primary_card_number = resolved.get("primary_card_number")
 
-        # Step 2: Confirm with get_member_details_by_card
-        member_data = get_member_details_by_card(card_number)
+        # Step 1a: Fallback if resolution failed
+        if not resolved.get("success") or not primary_card_number:
+            # Check if card exists in current business anyway
+            fallback_member = BusinessMember.objects.filter(
+                BizMbrCardNo=card_number,
+                BizMbrBizId=business_id
+            ).first()
+
+            if fallback_member:
+                if not fallback_member.BizMbrIsActive:
+                    return Response(
+                        {"success": False, "message": "Member is not active."},
+                        status=status.HTTP_200_OK
+                    )
+                serializer = CheckMemberActiveSerializer(fallback_member)
+                return Response(
+                    {"success": True, "message": "Active member found (primary fallback).", "data": serializer.data},
+                    status=status.HTTP_200_OK
+                )
+
+            # Check if card exists in other business
+            other_business_member = BusinessMember.objects.filter(
+                BizMbrCardNo=card_number
+            ).first()
+            if other_business_member:
+                return Response(
+                    {
+                        "success": False,
+                        "physical_card":False,
+                        "message": "This card belongs to another business.",
+                        "other_business_id": other_business_member.BizMbrBizId
+                    },
+                    status=status.HTTP_200_OK
+                )
+
+            return Response(
+                {"success": False, "message": resolved.get("message", "This card is not registered.")},
+                status=status.HTTP_200_OK
+            )
+
+        # Step 2: Confirm member exists via Auth Server
+        member_data = get_member_details_by_card(primary_card_number)
         if not member_data:
             return Response(
                 {"success": False, "message": "Card is not associated with your business."},
                 status=status.HTTP_200_OK
             )
 
-        # Step 3: Find BusinessMember
+        # Step 3: Find BusinessMember in current business
         business_member = BusinessMember.objects.filter(
-            BizMbrCardNo=card_number,
+            BizMbrCardNo=primary_card_number,
             BizMbrBizId=business_id
         ).first()
 
         if not business_member:
+            # Card exists, but belongs to other business?
+            other_business_member = BusinessMember.objects.filter(
+                BizMbrCardNo=primary_card_number
+            ).first()
+            if other_business_member:
+                return Response(
+                    {
+                        "success": False,
+                        "message": "This card belongs to another business.",
+                        "other_business_id": other_business_member.BizMbrBizId
+                    },
+                    status=status.HTTP_200_OK
+                )
+
             return Response(
                 {"success": False, "error": "No active member found for this card number."},
                 status=status.HTTP_200_OK
             )
 
+        # Step 4: Check active status
         if not business_member.BizMbrIsActive:
             return Response(
                 {"success": False, "message": "Member is not active.", "BizMbrIsActive": False},
                 status=status.HTTP_200_OK
             )
 
-        # Final Step: Return success
+        # Step 5: Return success
         serializer = CheckMemberActiveSerializer(business_member)
         return Response(
             {"success": True, "message": "Active member found.", "data": serializer.data},
             status=status.HTTP_200_OK
         )
-
 
 
 
@@ -887,9 +1008,24 @@ class CardTransactionApi(APIView):
 
     @swagger_auto_schema(responses={200: CardTransactionSerializer(many=True)})
     def get(self, request):
-        transactions = CardTransaction.objects.filter(CrdTrnsBizId=request.user.business_id)
-        serializer = CardTransactionSerializer(transactions, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        transactions = CardTransaction.objects.filter(
+            CrdTrnsBizId=request.user.business_id
+        ).order_by("-id")
+
+        # Use custom paginate function
+        page, pagination_meta = paginate(
+            request,
+            transactions,
+            data_per_page=int(request.GET.get("page_size", 10))
+        )
+
+        serialized_data = CardTransactionSerializer(page, many=True).data
+
+        return Response({
+            "status": 200,
+            "data": serialized_data,
+            "pagination_meta_data": pagination_meta
+        }, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(request_body=CardTransactionSerializer)
     def post(self, request):
@@ -1150,6 +1286,8 @@ class RedeemPointsAPIView(APIView):
 
         card_number = serializer.validated_data["card_number"]
         business_id = serializer.validated_data["business_id"]
+        custom_points = serializer.validated_data.get("custom_points")
+        
         member_data = get_member_details_by_card(card_number)
         full_name = member_data.get("full_name")
         email = member_data.get("email")
@@ -1179,13 +1317,26 @@ class RedeemPointsAPIView(APIView):
             )
 
         reward_rule = business_member.BizMbrRuleId
-        milestone = reward_rule.RewardRuleMilestone
-
-        if cumulative_points.CurrentBalance < milestone:
-            return Response(
-                {"success": False, "message": "Insufficient points for redemption."},
-                status=status.HTTP_200_OK
-            )
+        # ✅ Decide redemption amount
+        if custom_points is not None:
+            if custom_points <= 0:
+                return Response(
+                    {"success": False, "message": "Custom points must be greater than 0."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if custom_points > cumulative_points.CurrentBalance:
+                return Response(
+                    {"success": False, "message": "Insufficient points for custom redemption."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            milestone = custom_points
+        else:
+            milestone = reward_rule.RewardRuleMilestone
+            if cumulative_points.CurrentBalance < milestone:
+                return Response(
+                    {"success": False, "message": f"Minimum {milestone} points required for milestone redemption."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         # 💾 Create transaction
         transaction = CardTransaction.objects.create(
@@ -1198,6 +1349,7 @@ class RedeemPointsAPIView(APIView):
 
         # 🔄 Update points
         cumulative_points.LifetimeRedeemedPoints += milestone
+        
         cumulative_points.CurrentBalance -= milestone
         cumulative_points.save()
         # Prepare email context
@@ -1301,30 +1453,92 @@ class ApproveJoinRequestView(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="Approve a specific join request by request_id.",
+        operation_description="Approve or reject a specific join request by request_id. False will delete the request.",
         manual_parameters=[
             openapi.Parameter(
                 'request_id',
                 openapi.IN_PATH,
                 description="ID of the join request",
-                type=openapi.TYPE_INTEGER
+                type=openapi.TYPE_INTEGER,
+                required=True,
             )
         ],
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'is_approved': openapi.Schema(
+                    type=openapi.TYPE_BOOLEAN,
+                    description="True to approve, False to reject/delete"
+                )
+            },
+            required=['is_approved']
+        ),
         responses={
-            200: openapi.Response(description="Member approved and added."),
-            404: openapi.Response(description="Join request not found.")
-        }
+            200: openapi.Response(
+                description="Join request processed successfully",
+                examples={
+                    "application/json": {
+                        "success": True,
+                        "message": "Member approved",
+                        "card_number": "5415219928973405",
+                        "is_approved": True
+                    }
+                }
+            ),
+            400: openapi.Response(
+                description="Missing or invalid is_approved",
+                examples={
+                    "application/json": {
+                        "success": False,
+                        "error": "is_approved field is required (True/False)."
+                    }
+                }
+            ),
+            404: openapi.Response(
+                description="Join request not found",
+                examples={
+                    "application/json": {
+                        "success": False,
+                        "error": "Join request not found."
+                    }
+                }
+            )
+        },
+        tags=["Join Requests"]
     )
     def post(self, request, request_id):
         try:
             join_request = MemberJoinRequest.objects.get(id=request_id)
 
-            # Approve and save the join request
-            join_request.is_approved = True
-            join_request.responded_at = timezone.now()
-            join_request.save()
+            # Read boolean from request body
+            is_approved = request.data.get("is_approved", None)
+            if is_approved is None or not isinstance(is_approved, bool):
+                return Response(
+                    {"success": False, "error": "is_approved field is required (True/False)."},
+                    status=400
+                )
 
-            return Response({"success": True, "message": "Member approved ", "card_number":join_request.card_number,"BizMbrIsActive": False,}, status=200)
+            if is_approved:
+                # Approve the join request
+                join_request.is_approved = True
+                join_request.responded_at = timezone.now()
+                join_request.save()
+                message = "Member approved"
+            else:
+                # Reject: delete the join request
+                join_request.delete()
+                message = "Join request rejected and deleted"
+
+            return Response({
+                "success": True,
+                "message": message,
+                "card_number": join_request.card_number if is_approved else None,
+                "is_approved": is_approved
+            }, status=200)
 
         except MemberJoinRequest.DoesNotExist:
-            return Response({"success": False, "error": "Join request not found."}, status=404)
+            return Response({
+                "success": False,
+                "error": "Join request not found."
+            }, status=404)
+

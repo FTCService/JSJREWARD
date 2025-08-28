@@ -39,7 +39,7 @@ def send_sms(payload):
 
 def get_member_details_by_mobile(mobile_number):
     try:
-        response = requests.get(settings.AUTH_SERVER_URL + "/member-details/", params={"mobile_number": mobile_number})
+        response = requests.get(settings.AUTH_SERVER_URL + "/api/member-details/", params={"mobile_number": mobile_number})
         if response.status_code == 200:
             return response.json()
         return None
@@ -54,7 +54,7 @@ def get_member_details_by_mobile(mobile_number):
 
 def get_member_details_by_card(card_number):
     try:
-        response = requests.get(settings.AUTH_SERVER_URL + "/cardno/member-details/", params={"card_number": card_number})
+        response = requests.get(settings.AUTH_SERVER_URL + "/api/cardno/member-details/", params={"card_number": card_number})
         if response.status_code == 200:
             return response.json()
         return None
@@ -70,7 +70,7 @@ def get_member_details_by_card(card_number):
 
 def get_business_details_by_id(business_id):
     try:
-        response = requests.get(settings.AUTH_SERVER_URL + "/business/details/", params={"business_id": business_id})
+        response = requests.get(settings.AUTH_SERVER_URL + "/api/business/details/", params={"business_id": business_id})
         if response.status_code == 200:
             return response.json()
         return None
